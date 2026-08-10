@@ -1,0 +1,136 @@
+//! 状态目录监听器 + 衰减定时器。
+//!
+//! 监听 ~/.zcode-pet/state/ 变化 -> 读文件 -> 创建/更新窗口；
+//! 每 60s 扫描一次应用衰减规则并回收失联会话。
+
+use crate::pet;
+use crate::window;
+use std::path::Path;
+use std::time::Duration;
+use tauri::{AppHandle, Emitter, Manager};
+
+/// 处理单个状态文件变化。
+fn handle_state_file(app: &AppHandle, path: &Path) {
+    let Ok(content) = std::fs::read_to_string(path) else {
+        return;
+    };
+    let Ok(state) = serde_json::from_str::<pet::StateFile>(&content) else {
+        return;
+    };
+
+    // 更新 managed state
+    {
+        let app_state = app.state::<crate::AppState>();
+        let mut sessions = app_state.sessions.lock().unwrap();
+        sessions.insert(
+            state.session_id.clone(),
+            crate::SessionEntry {
+                raw_state: state.state.clone(),
+                ts: state.ts,
+            },
+        );
+    }
+
+    window::ensure_window(app, &state.session_id, &state.state);
+}
+
+/// 启动文件监听器（独立线程，debounce 200ms）。
+pub fn start_watcher(app: AppHandle) {
+    let state_dir = pet::state_dir();
+    std::fs::create_dir_all(&state_dir).ok();
+
+    let app_handle = app.clone();
+
+    std::thread::spawn(move || {
+        use notify::RecursiveMode;
+        use notify_debouncer_full::new_debouncer;
+
+        let handler_app = app_handle.clone();
+        let mut debouncer = match new_debouncer(
+            Duration::from_millis(200),
+            None,
+            move |result: notify_debouncer_full::DebounceEventResult| {
+                if let Ok(events) = result {
+                    for event in events {
+                        for path in &event.event.paths {
+                            if path.extension().map_or(false, |e| e == "json") {
+                                handle_state_file(&handler_app, path);
+                            }
+                        }
+                    }
+                }
+            },
+        ) {
+            Ok(d) => d,
+            Err(e) => {
+                log::error!("watcher init failed: {e}");
+                return;
+            }
+        };
+
+        if let Err(e) = debouncer
+            .watch(&state_dir, RecursiveMode::NonRecursive)
+        {
+            log::error!("watcher start failed: {e}");
+            return;
+        }
+
+        log::info!("watching {}", state_dir.display());
+
+        // 阻塞线程以保持 debouncer 存活
+        // notify_debouncer_full 内部线程持续运行，这里 sleep 保活
+        loop {
+            std::thread::sleep(Duration::from_secs(3600));
+        }
+    });
+}
+
+/// 启动衰减定时器（每 60s 扫描一次）。
+pub fn start_decay_timer(app: AppHandle) {
+    std::thread::spawn(move || loop {
+        std::thread::sleep(Duration::from_secs(60));
+        apply_decay(&app);
+    });
+}
+
+/// 应用衰减规则：更新窗口状态、回收失联会话。
+fn apply_decay(app: &AppHandle) {
+    let now = chrono::Utc::now().timestamp();
+    let mut dead_sessions = Vec::new();
+
+    {
+        let app_state = app.state::<crate::AppState>();
+        let mut sessions = app_state.sessions.lock().unwrap();
+
+        for (session_id, entry) in sessions.iter_mut() {
+            let effective = window::effective_state(&entry.raw_state, entry.ts);
+
+            // R3: 1800s 无事件 -> 会话死亡
+            if now - entry.ts > 1800 {
+                dead_sessions.push(session_id.clone());
+                continue;
+            }
+
+            // 发送衰减后的状态
+            let label = pet::session_label(session_id);
+            if let Some(window) = app.get_webview_window(&label) {
+                let _ = window.emit(
+                    "pet://state",
+                    window::StatePayload { state: effective },
+                );
+            }
+        }
+
+        for sid in &dead_sessions {
+            sessions.remove(sid);
+        }
+    }
+
+    // 清理死亡会话的窗口和状态文件
+    for sid in &dead_sessions {
+        window::close_window(app, sid);
+        let file = pet::state_dir().join(format!("{sid}.json"));
+        let _ = std::fs::remove_file(&file);
+        log::info!("reaped dead session {sid}");
+    }
+}

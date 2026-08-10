@@ -24,3 +24,6 @@ __pycache__/
 # 日志与临时文件
 *.log
 *.tmp
+
+# Tauri 自动生成的 schema（每次构建变化，无需提交）
+src-tauri/gen/
