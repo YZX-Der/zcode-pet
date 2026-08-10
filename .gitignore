@@ -1,0 +1,26 @@
+# Rust
+target/
+**/*.rs.bk
+
+# Node / Vite
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+
+# macOS
+.DS_Store
+
+# 编辑器
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# 日志与临时文件
+*.log
+*.tmp
