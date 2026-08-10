@@ -18,7 +18,11 @@ pub struct StatePayload {
 ///
 /// 规则见 docs/03-state-protocol.md §4
 pub fn effective_state(raw_state: &str, ts: i64) -> String {
-    let now = chrono::Utc::now().timestamp();
+    compute_effective_state(raw_state, ts, chrono::Utc::now().timestamp())
+}
+
+/// 可测试的纯函数版本：传入 now 避免依赖系统时钟。
+pub fn compute_effective_state(raw_state: &str, ts: i64, now: i64) -> String {
     let elapsed = now - ts;
 
     // R1: ready 持续 300s → idle
@@ -182,5 +186,56 @@ pub fn set_all_state(app: &AppHandle, state: &str) {
                 StatePayload { state: state.into() },
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::compute_effective_state;
+
+    const NOW: i64 = 10_000;
+
+    #[test]
+    fn test_running_stays_running() {
+        assert_eq!(compute_effective_state("running", NOW - 10, NOW), "running");
+    }
+
+    #[test]
+    fn test_needs_input_stays() {
+        assert_eq!(
+            compute_effective_state("needs_input", NOW - 100, NOW),
+            "needs_input"
+        );
+    }
+
+    #[test]
+    fn test_ready_within_300s_stays_ready() {
+        assert_eq!(compute_effective_state("ready", NOW - 300, NOW), "ready");
+    }
+
+    #[test]
+    fn test_ready_after_300s_decays_to_idle() {
+        // R1: ready > 300s → idle
+        assert_eq!(compute_effective_state("ready", NOW - 301, NOW), "idle");
+    }
+
+    #[test]
+    fn test_any_state_after_600s_decays_to_sleep() {
+        // R2: 任意非 ready 状态 > 600s → sleep
+        assert_eq!(compute_effective_state("running", NOW - 601, NOW), "sleep");
+        assert_eq!(compute_effective_state("blocked", NOW - 601, NOW), "sleep");
+        // 注意：ready > 300s 先命中 R1 返回 idle，不会走到 R2
+    }
+
+    #[test]
+    fn test_ready_exactly_300s_stays_ready() {
+        // 边界：恰好 300s 不衰减
+        assert_eq!(compute_effective_state("ready", NOW - 300, NOW), "ready");
+    }
+
+    #[test]
+    fn test_any_state_exactly_600s_not_sleep() {
+        // 边界：恰好 600s 不进入 sleep
+        assert_eq!(compute_effective_state("idle", NOW - 600, NOW), "idle");
     }
 }
