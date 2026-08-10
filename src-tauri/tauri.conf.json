@@ -17,7 +17,7 @@
       "assetProtocol": {
         "enable": true,
         "scope": {
-          "allow": ["$HOME/.zcode-pet/**", "/**"]
+          "allow": ["$HOME/.zcode-pet/**", "$HOME/.codex/**", "/**"]
         }
       }
     }
