@@ -4,23 +4,123 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>zcode-pet</title>
-    <style>
-      * { margin: 0; padding: 0; box-sizing: border-box; }
-      html, body {
-        width: 100%; height: 100%;
-        overflow: hidden;
-        background: transparent;
-        -webkit-user-select: none;
-        user-select: none;
-      }
-      #pet {
-        image-rendering: pixelated;
-        image-rendering: crisp-edges;
-      }
-    </style>
+    <link rel="stylesheet" href="/src/styles.css" />
   </head>
   <body>
-    <canvas id="pet"></canvas>
-    <script type="module" src="/src/main.ts"></script>
+    <div class="app-shell">
+      <!-- 侧边栏 -->
+      <aside class="sidebar" data-tauri-drag-region>
+        <div class="brand">
+          <span class="brand-icon">🐾</span>
+          <span class="brand-name">zcode-pet</span>
+        </div>
+        <nav class="nav">
+          <button class="nav-item active" data-tab="settings">⚙️ 设置</button>
+          <button class="nav-item" data-tab="sessions">🖥️ 会话</button>
+          <button class="nav-item" data-tab="help">📖 说明</button>
+        </nav>
+      </aside>
+
+      <!-- 主内容区 -->
+      <main class="content">
+        <!-- 设置页 -->
+        <section id="tab-settings" class="tab-pane active">
+          <div class="settings-layout">
+            <div class="settings-form">
+              <h2>设置</h2>
+
+              <div class="field">
+                <label>宠物大小</label>
+                <div class="row">
+                  <input type="range" id="scale" min="0.3" max="1.5" step="0.05" />
+                  <span class="value" id="scale-val">60%</span>
+                </div>
+              </div>
+
+              <div class="field">
+                <label>不透明度</label>
+                <div class="row">
+                  <input type="range" id="opacity" min="0.5" max="1.0" step="0.05" />
+                  <span class="value" id="opacity-val">100%</span>
+                </div>
+              </div>
+
+              <div class="field">
+                <label>选择宠物</label>
+                <select id="pet-select"></select>
+              </div>
+
+              <div class="field">
+                <label>始终置顶</label>
+                <label class="toggle">
+                  <input type="checkbox" id="always-on-top" />
+                  <span class="slider"></span>
+                </label>
+              </div>
+
+              <div class="field">
+                <label>点击激活目标（按优先级）</label>
+                <input type="text" id="activate-targets" class="text-input"
+                  placeholder="ZCode, iTerm2, Terminal" />
+              </div>
+            </div>
+
+            <!-- 预览区 -->
+            <div class="preview-panel">
+              <h3>预览</h3>
+              <div class="preview-canvas-wrap">
+                <canvas id="preview-canvas"></canvas>
+              </div>
+              <p class="preview-hint">拖动滑块实时查看效果</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- 会话页 -->
+        <section id="tab-sessions" class="tab-pane">
+          <h2>活跃会话</h2>
+          <div id="session-list" class="session-list">
+            <p class="empty-hint">加载中...</p>
+          </div>
+        </section>
+
+        <!-- 说明页 -->
+        <section id="tab-help" class="tab-pane">
+          <h2>使用说明</h2>
+          <div class="help-content">
+            <div class="help-section">
+              <h3>1️⃣ 安装 Hooks 联动</h3>
+              <p>让宠物能自动响应 ZCode 任务状态变化：</p>
+              <pre>bash scripts/install.sh</pre>
+            </div>
+            <div class="help-section">
+              <h3>2️⃣ 生成内置宠物</h3>
+              <p>生成 5 只像素宠物到用户目录：</p>
+              <pre>python3 tools/petgen.py build --out ~/.zcode-pet/pets</pre>
+            </div>
+            <div class="help-section">
+              <h3>3️⃣ 开始使用</h3>
+              <p>打开一个 ZCode 会话开始对话，宠物会自动出现在屏幕右下角，并根据任务状态切换动画。</p>
+              <ul>
+                <li><b>点击</b>宠物 → 跳回 ZCode 窗口</li>
+                <li><b>拖拽</b>宠物 → 移动位置</li>
+                <li><b>关闭主窗口</b> → 隐藏到托盘，宠物继续运行</li>
+              </ul>
+            </div>
+            <div class="help-section">
+              <h3>4️⃣ 状态说明</h3>
+              <table class="state-table">
+                <tr><td>🔵 Running</td><td>任务执行中</td></tr>
+                <tr><td>🟡 Needs Input</td><td>等待确认权限</td></tr>
+                <tr><td>🟢 Ready</td><td>任务完成</td></tr>
+                <tr><td>🔴 Blocked</td><td>执行出错</td></tr>
+                <tr><td>😴 Sleep</td><td>长时间无活动</td></tr>
+              </table>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+    <script type="module" src="/src/dashboard.ts"></script>
   </body>
 </html>
