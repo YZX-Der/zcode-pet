@@ -56,7 +56,7 @@
 
 | ZCode hook 事件 | 写入状态 | 说明 |
 |---|---|---|
-| SessionStart | idle | 会话启动，宠物唤醒 |
+| SessionStart | idle | 会话启动（打开对话），仅记录状态，不创建桌宠 |
 | UserPromptSubmit | running | 用户提交任务 |
 | PreToolUse | running | 工具调用开始 |
 | PostToolUse | running | 工具调用完成（任务仍在继续） |
@@ -64,7 +64,9 @@
 | PostToolUseFailure | blocked | 工具失败/出错 |
 | Stop | ready | 本轮任务完成，有未读结果 |
 
-## 4. 应用侧衰减与回收规则
+## 4. 应用侧创建、衰减与回收规则
+
+**创建时机（C1）**：会话尚无宠物窗口时，仅当状态为 `running` / `needs_input` / `blocked`（执行中的任务）才创建桌宠；`idle`（打开会话未提交任务）与 `ready`（任务已完成）只写状态文件、不建桌宠，避免桌面堆满"打开过"的会话宠物。已有窗口的会话不受此限制——状态变化（含衰减）时照常更新动画。
 
 | 规则 | 阈值 | 效果 |
 |---|---|---|
