@@ -9,17 +9,23 @@ export class SpriteAnimator {
   private frame = 0;
   private lastFrameTime = 0;
   private rafId = 0;
+  private scale: number;
 
-  constructor(canvas: HTMLCanvasElement) {
+  constructor(canvas: HTMLCanvasElement, scale = 1) {
     this.ctx = canvas.getContext("2d")!;
     this.ctx.imageSmoothingEnabled = false;
+    this.scale = scale;
   }
 
   async load(manifest: PetManifest, sheetUrl: string): Promise<void> {
     this.manifest = manifest;
     const [fw, fh] = manifest.frame;
+    // Canvas 内部分辨率保持精灵表原始尺寸（清晰像素）
     this.ctx.canvas.width = fw;
     this.ctx.canvas.height = fh;
+    // 通过 CSS 缩放到窗口实际尺寸
+    this.ctx.canvas.style.width = `${fw * this.scale}px`;
+    this.ctx.canvas.style.height = `${fh * this.scale}px`;
     this.sheet = await this.loadImage(sheetUrl);
     this.start();
   }

@@ -1,20 +1,24 @@
-//! zcode-pet 应用入口 -- Tauri 2 透明悬浮桌宠。
+//! zcode-pet 应用入口 -- Tauri 2 桌面宠物应用。
+
+#[cfg(target_os = "macos")]
+#[macro_use]
+extern crate objc;
 
 mod activate;
+mod dashboard;
 mod pet;
+mod settings;
 mod watcher;
 mod window;
 
 use std::collections::HashMap;
 use std::sync::Mutex;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
-use tauri::{Manager, tray::TrayIconBuilder};
+use tauri::{AppHandle, Manager, tray::TrayIconBuilder, WindowEvent};
 
 /// 全局共享状态
 pub struct AppState {
-    /// session_id -> 会话条目
     pub sessions: Mutex<HashMap<String, SessionEntry>>,
-    /// 当前选中的宠物名
     pub pet_name: Mutex<String>,
 }
 
@@ -25,9 +29,11 @@ pub struct SessionEntry {
 
 /// 构建托盘菜单
 fn build_tray_menu(app: &tauri::AppHandle) -> Menu<tauri::Wry> {
-    let wake = MenuItem::with_id(app, "wake", "唤醒全部", true, None::<&str>)
+    let show = MenuItem::with_id(app, "show-main", "显示主窗口", true, None::<&str>)
+        .expect("show item");
+    let wake = MenuItem::with_id(app, "wake", "唤醒全部宠物", true, None::<&str>)
         .expect("wake item");
-    let tuck = MenuItem::with_id(app, "tuck", "收起全部", true, None::<&str>)
+    let tuck = MenuItem::with_id(app, "tuck", "收起全部宠物", true, None::<&str>)
         .expect("tuck item");
     let quit = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)
         .expect("quit item");
@@ -61,6 +67,8 @@ fn build_tray_menu(app: &tauri::AppHandle) -> Menu<tauri::Wry> {
         }
     }
 
+    let _ = menu.append(&show);
+    let _ = menu.append(&sep.clone());
     let _ = menu.append(&wake);
     let _ = menu.append(&tuck);
     let _ = menu.append(&PredefinedMenuItem::separator(app).expect("separator"));
@@ -84,11 +92,23 @@ fn setup_tray(app: &tauri::AppHandle) {
         .on_tray_icon_event(|tray, event| {
             if let tauri::tray::TrayIconEvent::Click { button, .. } = event {
                 if button == tauri::tray::MouseButton::Left {
-                    window::show_all(tray.app_handle());
+                    window::show_main_window(tray.app_handle());
                 }
             }
         })
         .build(app);
+}
+
+/// Tauri 命令：前端加载完成后调用，激活并显示主窗口。
+/// （必须放在子模块中，Tauri 2 的 command 宏在 crate root 会冲突）
+mod cmd {
+    use crate::window;
+    use tauri::AppHandle;
+
+    #[tauri::command]
+    pub fn frontend_ready(app: AppHandle) {
+        window::show_main_window(&app);
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -108,35 +128,57 @@ pub fn run() {
             let id = event.id().as_ref();
             match id {
                 "quit" => app.exit(0),
+                "show-main" => window::show_main_window(app),
                 "wake" => window::show_all(app),
                 "tuck" => window::hide_all(app),
                 other if other.starts_with("pet-select-") => {
                     let name = &other["pet-select-".len()..];
+                    let mut settings = settings::load();
+                    settings.pet = name.to_string();
+                    let _ = settings::save(&settings);
                     let state = app.state::<AppState>();
                     *state.pet_name.lock().unwrap() = name.to_string();
+                    window::recreate_all(app);
                     log::info!("switched pet to {name}");
-                    // 通过重新注入 __PET_INIT__ 并 reload 让窗口加载新宠物
-                    if let Some(sheet) = pet::sheet_path(name) {
-                        for label in window::all_pet_labels(app) {
-                            if let Some(win) = app.get_webview_window(&label) {
-                                let init_js = format!(
-                                    r#"window.__PET_INIT__ = {{ pet: "{name}", state: "idle", sheet: "{}" }};"#,
-                                    sheet.display()
-                                );
-                                let _ = win.eval(&init_js);
-                                let _ = win.eval("location.reload();");
-                            }
-                        }
-                    }
                 }
                 _ => {}
             }
         })
+        .on_window_event(|window, event| {
+            // 关闭主窗口时隐藏到托盘，不退出进程
+            if window.label() == "main" {
+                if let WindowEvent::CloseRequested { api, .. } = event {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
+        })
         .setup(|app| {
-            // 确保应用作为常规应用激活（非后台/辅助模式）
-            app.set_activation_policy(tauri::ActivationPolicy::Regular);
+            // 确保应用作为常规应用激活（Dock 可见，而非后台辅助）
+            #[cfg(target_os = "macos")]
+            {
+                let _ = app.set_activation_policy(tauri::ActivationPolicy::Regular);
+            }
 
-            // 扫描现有状态文件，为每个活跃会话创建窗口
+            // 手动创建主窗口
+            use tauri::{WebviewUrl, WebviewWindowBuilder};
+            let main_window = WebviewWindowBuilder::new(
+                app,
+                "main",
+                WebviewUrl::App("index.html".into()),
+            )
+            .title("zcode-pet")
+            .inner_size(960.0, 640.0)
+            .min_inner_size(800.0, 520.0)
+            .center()
+            .visible(true);
+
+            match main_window.build() {
+                Ok(_) => log::info!("main window created"),
+                Err(e) => log::error!("failed to create main window: {e}"),
+            }
+
+            // 扫描现有状态文件，为每个活跃会话创建宠物窗口
             window::scan_and_create(app.handle());
 
             // 启动状态目录监听器
@@ -148,9 +190,20 @@ pub fn run() {
             // 设置托盘菜单
             setup_tray(app.handle());
 
+            // 强制激活主窗口到最前面
+            window::show_main_window(app.handle());
+
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![activate::activate_target])
+        .invoke_handler(tauri::generate_handler![
+            activate::activate_target,
+            settings::get_settings,
+            settings::save_settings,
+            settings::list_pets,
+            dashboard::list_sessions,
+            dashboard::get_pet_sheet,
+            cmd::frontend_ready
+        ])
         .run(tauri::generate_context!())
         .expect("error while running zcode-pet");
 }
