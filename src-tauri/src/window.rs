@@ -53,6 +53,15 @@ pub fn show_main_window(app: &AppHandle) {
     }
 }
 
+/// 会话尚无窗口时，是否为其创建桌宠。
+///
+/// 仅执行中的任务（running / needs_input / blocked）创建；
+/// idle（打开会话未提交任务）与 ready（任务已完成）只写状态文件，
+/// 不建桌宠，避免桌面堆满「打开过」的会话宠物。
+pub fn should_create_window(state: &str) -> bool {
+    matches!(state, "running" | "needs_input" | "blocked")
+}
+
 /// 为一个会话创建宠物浮窗（若尚未存在）。
 pub fn ensure_window(app: &AppHandle, session_id: &str, state: &str) {
     let label = pet::session_label(session_id);
@@ -62,6 +71,11 @@ pub fn ensure_window(app: &AppHandle, session_id: &str, state: &str) {
         let _ = window.emit("pet://state", StatePayload {
             state: effective_state(state, chrono::Utc::now().timestamp()),
         });
+        return;
+    }
+
+    // 尚未有窗口：仅执行中的任务创建（idle/ready 不创建，靠衰减规则渐隐回收）
+    if !should_create_window(state) {
         return;
     }
 
@@ -131,29 +145,39 @@ pub fn ensure_window(app: &AppHandle, session_id: &str, state: &str) {
         Ok(window) => {
             log::info!("created pet window '{label}' ({frame_w}x{frame_h})");
 
-            // macOS: 提升窗口级别到全屏之上，并设置跨 Space 显示
+            // macOS: 提升窗口级别到全屏之上，并设置跨 Space 显示。
+            //
+            // 注意：ensure_window 可能被 watcher 线程（后台线程）调用，
+            // 而 AppKit 的 NSWindow 操作必须在主线程执行，否则触发
+            // NSAssert 崩溃（SIGTRAP）。因此这里通过 run_on_main_thread
+            // 调度到主线程再执行。
             #[cfg(target_os = "macos")]
             {
                 let ns_window_ptr = window.ns_window().unwrap_or(std::ptr::null_mut());
                 if !ns_window_ptr.is_null() {
-                    let ns_window = ns_window_ptr as *mut objc::runtime::Object;
-                    unsafe {
-                        // setLevel: 用极高值确保在全屏窗口之上
-                        // macOS 全屏窗口的 level 在 CGWindowList 里显示为 0，
-                        // 但实际 NSWindow level 可能很高。用 1001 (高于 ScreenSaver)
-                        let level: i64 = 1001;
-                        let _: () = msg_send![ns_window, setLevel: level];
-                        // setCollectionBehavior:
-                        // NSWindowCollectionBehaviorCanJoinAllSpaces = 1
-                        // NSWindowCollectionBehaviorStationary = 4
-                        // NSWindowCollectionBehaviorFullScreenAuxiliary = 128
-                        // NSWindowCollectionBehaviorIgnoresCycle = 1024
-                        let behavior: u64 = 1 | 4 | 128 | 1024;
-                        let _: () = msg_send![ns_window, setCollectionBehavior: behavior];
-                        // 确保不接受鼠标事件时也不被遮挡
-                        let _: () = msg_send![ns_window, setOpaque: false];
-                        let _: () = msg_send![ns_window, setHasShadow: false];
-                    }
+                    let app_handle = app.clone();
+                    // 裸指针不满足 Send，用 usize 传递
+                    let ns_window_addr = ns_window_ptr as usize;
+                    let _ = app_handle.run_on_main_thread(move || {
+                        let ns_window = ns_window_addr as *mut objc::runtime::Object;
+                        unsafe {
+                            // setLevel: 用极高值确保在全屏窗口之上
+                            // macOS 全屏窗口的 level 在 CGWindowList 里显示为 0，
+                            // 但实际 NSWindow level 可能很高。用 1001 (高于 ScreenSaver)
+                            let level: i64 = 1001;
+                            let _: () = msg_send![ns_window, setLevel: level];
+                            // setCollectionBehavior:
+                            // NSWindowCollectionBehaviorCanJoinAllSpaces = 1
+                            // NSWindowCollectionBehaviorStationary = 4
+                            // NSWindowCollectionBehaviorFullScreenAuxiliary = 128
+                            // NSWindowCollectionBehaviorIgnoresCycle = 1024
+                            let behavior: u64 = 1 | 4 | 128 | 1024;
+                            let _: () = msg_send![ns_window, setCollectionBehavior: behavior];
+                            // 确保不接受鼠标事件时也不被遮挡
+                            let _: () = msg_send![ns_window, setOpaque: false];
+                            let _: () = msg_send![ns_window, setHasShadow: false];
+                        }
+                    });
                 }
             }
         }
@@ -206,6 +230,18 @@ pub fn scan_and_create(app: &AppHandle) {
             }
             if let Ok(content) = std::fs::read_to_string(&path) {
                 if let Ok(state) = serde_json::from_str::<pet::StateFile>(&content) {
+                    // 同步到 managed state，确保衰减定时器/热更新/回收能跟踪这些会话
+                    {
+                        let app_state = app.state::<crate::AppState>();
+                        let mut sessions = app_state.sessions.lock().unwrap();
+                        sessions.insert(
+                            state.session_id.clone(),
+                            crate::SessionEntry {
+                                raw_state: state.state.clone(),
+                                ts: state.ts,
+                            },
+                        );
+                    }
                     ensure_window(app, &state.session_id, &state.state);
                 }
             }
@@ -251,31 +287,53 @@ pub fn recreate_all(app: &AppHandle) {
     let sheet = pet::sheet_path(&pet_name)
         .unwrap_or_else(|| pet::pet_dir("zbuddy").join("spritesheet.webp"));
 
-    for label in all_pet_labels(app) {
+    // 收集每个会话的当前有效状态（避免热更新时全部回退成 idle）
+    let session_states: Vec<(String, String)> = {
+        let app_state = app.state::<crate::AppState>();
+        let sessions = app_state.sessions.lock().unwrap();
+        sessions
+            .iter()
+            .map(|(sid, entry)| (sid.clone(), effective_state(&entry.raw_state, entry.ts)))
+            .collect()
+    };
+
+    for (session_id, state) in session_states {
+        let label = pet::session_label(&session_id);
         if let Some(window) = app.get_webview_window(&label) {
             // 修改窗口尺寸
             use tauri::LogicalSize;
             let _ = window.set_size(LogicalSize::new(frame_w, frame_h));
             let _ = window.set_always_on_top(settings.always_on_top);
 
-            // 注入新参数并调用前端的 updatePet
+            // 注入新参数并调用前端的 updatePet（状态保留会话自己的有效状态）
             let init_js = format!(
-                r#"window.__PET_INIT__ = {{ pet: "{pet_name}", state: "idle", sheet: "{}", scale: {scale}, opacity: {opacity} }};
+                r#"window.__PET_INIT__ = {{ pet: "{pet_name}", state: "{state}", sheet: "{}", scale: {scale}, opacity: {opacity} }};
                 if (typeof window.updatePet === 'function') window.updatePet();"#,
                 sheet.display()
             );
             let _ = window.eval(&init_js);
 
-            log::info!("updated pet window '{label}' ({frame_w}x{frame_h})");
+            log::info!("updated pet window '{label}' ({frame_w}x{frame_h}) state={state}");
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::compute_effective_state;
+    use super::{compute_effective_state, should_create_window};
 
     const NOW: i64 = 10_000;
+
+    #[test]
+    fn test_only_active_states_create_window() {
+        assert!(should_create_window("running"));
+        assert!(should_create_window("needs_input"));
+        assert!(should_create_window("blocked"));
+        // 打开会话/任务完成/休眠不创建新窗口（已有窗口则继续更新）
+        assert!(!should_create_window("idle"));
+        assert!(!should_create_window("ready"));
+        assert!(!should_create_window("sleep"));
+    }
 
     #[test]
     fn test_running_stays_running() {

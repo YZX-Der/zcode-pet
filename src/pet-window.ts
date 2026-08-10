@@ -12,6 +12,9 @@ const DRAG_THRESHOLD = 5;
 let animator: SpriteAnimator | null = null;
 let unsubListener: (() => void) | null = null;
 let interactionBound = false;
+// 当前最新状态：pet://state 事件更新它；
+// 热更新（updatePet）时优先用它，避免回退到 __PET_INIT__ 的初始快照
+let currentState: PetStateName | null = null;
 
 function getInit() {
   return (window as any).__PET_INIT__ as {
@@ -54,7 +57,7 @@ async function loadAndRender(): Promise<void> {
   // 创建新 animator（会重新设置 canvas 尺寸和 context）
   animator = new SpriteAnimator(canvas, scale);
   await animator.load(manifest, convertFileSrc(sheetPath));
-  animator.setState(init.state);
+  animator.setState(currentState ?? init.state);
 
   // 重新绑定状态监听
   if (unsubListener) {
@@ -62,6 +65,7 @@ async function loadAndRender(): Promise<void> {
     unsubListener = null;
   }
   unsubListener = await listen<StatePayload>("pet://state", (event) => {
+    currentState = event.payload.state;
     animator?.setState(event.payload.state);
   });
 
