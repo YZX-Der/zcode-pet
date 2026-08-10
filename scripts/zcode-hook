@@ -1,0 +1,48 @@
+#!/bin/sh
+# zcode-pet hook 脚本 —— 把 ZCode 会话事件写入状态文件
+# 协议规范见 docs/03-state-protocol.md
+#
+# 用法（由 ZCode hooks 调用）：zcode-hook <Event>
+# 环境变量（ZCode hook 运行时注入）：CLAUDE_SESSION_ID / CLAUDE_PROJECT_DIR
+#
+# 约束：ZCode hooks 内联执行，本脚本必须 <10ms、零输出、退出码恒 0。
+
+set -u
+
+EVENT="${1:-}"
+SESSION_ID="${CLAUDE_SESSION_ID:-}"
+PROJECT_DIR="${CLAUDE_PROJECT_DIR:-}"
+
+# 缺少会话 ID：静默通过，不阻断 ZCode
+[ -n "$SESSION_ID" ] || exit 0
+
+case "$EVENT" in
+  SessionStart)        STATE="idle" ;;
+  UserPromptSubmit)    STATE="running" ;;
+  PreToolUse)          STATE="running" ;;
+  PostToolUse)         STATE="running" ;;
+  PermissionRequest)   STATE="needs_input" ;;
+  PostToolUseFailure)  STATE="blocked" ;;
+  Stop)                STATE="ready" ;;
+  *)                   exit 0 ;;  # 未知事件静默忽略
+esac
+
+STATE_DIR="$HOME/.zcode-pet/state"
+mkdir -p "$STATE_DIR" 2>/dev/null || exit 0
+
+# JSON 最小转义（双引号与反斜杠）；仅用户可控路径需要
+esc() { printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'; }
+
+PROJECT=""
+[ -n "$PROJECT_DIR" ] && PROJECT="${PROJECT_DIR##*/}"
+
+TS=$(date +%s)
+FILE="$STATE_DIR/$SESSION_ID.json"
+TMP="$STATE_DIR/.$SESSION_ID.tmp"
+
+# 原子写入：先写临时文件再 mv，应用侧绝不会读到半个 JSON
+printf '{"version":1,"session_id":"%s","state":"%s","event":"%s","project":"%s","project_dir":"%s","ts":%s}\n' \
+  "$(esc "$SESSION_ID")" "$STATE" "$EVENT" "$(esc "$PROJECT")" "$(esc "$PROJECT_DIR")" "$TS" \
+  > "$TMP" 2>/dev/null && mv -f "$TMP" "$FILE" 2>/dev/null
+
+exit 0
