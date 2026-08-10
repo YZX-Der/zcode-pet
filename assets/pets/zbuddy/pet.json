@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "name": "zbuddy",
+  "display_name": "Z Buddy",
+  "description": "zcode-pet 默认机器人伙伴",
+  "author": "zcode-pet petgen",
+  "frame": [
+    192,
+    208
+  ],
+  "cols": 8,
+  "rows": 9,
+  "sheet": "spritesheet.webp",
+  "states": {
+    "idle": {
+      "row": 0,
+      "frames": 8,
+      "fps": 6
+    },
+    "running": {
+      "row": 1,
+      "frames": 8,
+      "fps": 10
+    },
+    "needs_input": {
+      "row": 2,
+      "frames": 8,
+      "fps": 6
+    },
+    "ready": {
+      "row": 3,
+      "frames": 8,
+      "fps": 6
+    },
+    "blocked": {
+      "row": 4,
+      "frames": 8,
+      "fps": 4
+    },
+    "sleep": {
+      "row": 5,
+      "frames": 8,
+      "fps": 3
+    }
+  }
+}
