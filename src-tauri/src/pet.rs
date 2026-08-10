@@ -42,14 +42,22 @@ pub fn builtin_pets_dir() -> PathBuf {
     }
 }
 
-/// 解析指定宠物的目录（优先用户自定义，其次内置）。
+/// Codex 宠物目录（兼容 Codex 社区宠物资源）。
+pub fn codex_pets_dir() -> PathBuf {
+    home().join(".codex").join("pets")
+}
+
+/// 解析指定宠物的目录（优先 zcode-pet 用户目录，其次 Codex 目录，最后内置）。
 pub fn pet_dir(pet_name: &str) -> PathBuf {
     let user = user_pets_dir().join(pet_name);
     if user.exists() {
-        user
-    } else {
-        builtin_pets_dir().join(pet_name)
+        return user;
     }
+    let codex = codex_pets_dir().join(pet_name);
+    if codex.exists() {
+        return codex;
+    }
+    builtin_pets_dir().join(pet_name)
 }
 
 /// 返回宠物精灵表绝对路径（webp 或 png）。
@@ -61,12 +69,12 @@ pub fn sheet_path(pet_name: &str) -> Option<PathBuf> {
         .find(|p| p.exists())
 }
 
-/// 列出所有可用宠物名（去重：用户自定义优先）。
+/// 列出所有可用宠物名（去重，扫描优先级：zcode-pet 用户目录 → Codex 目录 → 内置）。
 pub fn list_pets() -> Vec<String> {
     let mut names: Vec<String> = Vec::new();
     let mut seen = std::collections::HashSet::new();
 
-    for dir in [user_pets_dir(), builtin_pets_dir()] {
+    for dir in [user_pets_dir(), codex_pets_dir(), builtin_pets_dir()] {
         if let Ok(entries) = std::fs::read_dir(&dir) {
             for entry in entries.flatten() {
                 if let Some(name) = entry.file_name().to_str() {

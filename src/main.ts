@@ -3,7 +3,8 @@ import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { SpriteAnimator } from "./animator";
-import type { PetManifest, PetStateName, StatePayload } from "./protocol";
+import { loadManifest } from "./compat";
+import type { PetStateName, StatePayload } from "./protocol";
 
 const DRAG_THRESHOLD = 5; // 像素，小于此位移视为点击
 
@@ -18,12 +19,14 @@ async function main(): Promise<void> {
   const sheetPath = init?.sheet || "";
   const initialState = (init?.state || "idle") as PetStateName;
 
-  // 加载宠物清单与精灵表
+  // 加载宠物清单（自动检测 zcode-pet 原生格式或 Codex 兼容格式）
   const manifestUrl = convertFileSrc(
     sheetPath.replace(/spritesheet\.\w+$/, "pet.json"),
   );
   const res = await fetch(manifestUrl);
-  const manifest: PetManifest = await res.json();
+  const raw = await res.json() as Record<string, unknown>;
+  const sheetFileName = sheetPath.split("/").pop() || "spritesheet.webp";
+  const manifest = loadManifest(raw, sheetFileName);
 
   const canvas = document.getElementById("pet") as HTMLCanvasElement;
   const animator = new SpriteAnimator(canvas);
