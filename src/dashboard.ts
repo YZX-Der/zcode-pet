@@ -1,4 +1,4 @@
-/** 主窗口 Dashboard 逻辑 */
+/** 主窗口 Dashboard 逻辑 — macOS 26 Liquid Glass */
 
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -23,7 +23,7 @@ interface SessionInfo {
   ts: number;
 }
 
-// ── Tab 切换 ────────────────────────────────────────────
+// ── Tab 切换（带淡入淡出动画）─────────────────────────────
 
 function setupTabs(): void {
   const items = document.querySelectorAll<HTMLButtonElement>(".nav-item");
@@ -34,10 +34,25 @@ function setupTabs(): void {
       panes.forEach((p) => p.classList.remove("active"));
       btn.classList.add("active");
       const tab = btn.dataset.tab!;
-      document.getElementById(`tab-${tab}`)!.classList.add("active");
-      if (tab === "sessions") refreshSessions();
+      const pane = document.getElementById(`tab-${tab}`)!;
+      // 强制 reflow 以重新触发入场动画
+      void pane.offsetWidth;
+      pane.classList.add("active");
+      if (tab === "sessions") void refreshSessions();
     });
   });
+}
+
+// ── 滑块进度条同步 ────────────────────────────────────────
+
+function updateSliderProgress(input: HTMLInputElement): void {
+  const wrap = input.closest(".slider-wrap") as HTMLElement;
+  if (!wrap) return;
+  const min = parseFloat(input.min);
+  const max = parseFloat(input.max);
+  const val = parseFloat(input.value);
+  const pct = ((val - min) / (max - min)) * 100;
+  wrap.style.setProperty("--progress", `${pct}%`);
 }
 
 // ── 设置面板 ────────────────────────────────────────────
@@ -52,17 +67,47 @@ async function setupSettings(): Promise<void> {
   const scaleEl = document.getElementById("scale") as HTMLInputElement;
   const opacityEl = document.getElementById("opacity") as HTMLInputElement;
   const petSelect = document.getElementById("pet-select") as HTMLSelectElement;
+  const csWrap = document.getElementById("pet-select-wrap")!;
+  const csTrigger = csWrap.querySelector(".cs-trigger") as HTMLButtonElement;
+  const csValue = csWrap.querySelector(".cs-value") as HTMLElement;
+  const csDropdown = csWrap.querySelector(".cs-dropdown") as HTMLElement;
   const topEl = document.getElementById("always-on-top") as HTMLInputElement;
   const targetsEl = document.getElementById("activate-targets") as HTMLInputElement;
 
-  // 填充宠物下拉
-  for (const name of pets) {
-    const opt = document.createElement("option");
-    opt.value = name;
-    opt.textContent = name;
-    if (name === settings.pet) opt.selected = true;
-    petSelect.appendChild(opt);
-  }
+  // 构建自定义下拉选项
+  csDropdown.innerHTML = pets.map((name) =>
+    `<div class="cs-option ${name === settings.pet ? "selected" : ""}" data-value="${name}">
+      <span>${name}</span>
+      <span class="cs-check">✓</span>
+    </div>`
+  ).join("");
+  csValue.textContent = settings.pet;
+  petSelect.value = settings.pet;
+
+  // 点击触发器切换下拉
+  csTrigger.addEventListener("click", (e) => {
+    e.stopPropagation();
+    csWrap.classList.toggle("open");
+  });
+
+  // 点击选项
+  csDropdown.addEventListener("click", (e) => {
+    const opt = (e.target as HTMLElement).closest(".cs-option") as HTMLElement;
+    if (!opt) return;
+    const value = opt.dataset.value!;
+    csValue.textContent = value;
+    petSelect.value = value;
+    csDropdown.querySelectorAll(".cs-option").forEach((o) => o.classList.remove("selected"));
+    opt.classList.add("selected");
+    csWrap.classList.remove("open");
+    void save();
+    previewAnimator?.destroy();
+    previewAnimator = null;
+    initPreview(value, parseFloat(scaleEl.value));
+  });
+
+  // 点击外部关闭下拉
+  document.addEventListener("click", () => csWrap.classList.remove("open"));
 
   scaleEl.value = String(settings.scale);
   opacityEl.value = String(settings.opacity);
@@ -70,27 +115,23 @@ async function setupSettings(): Promise<void> {
   targetsEl.value = settings.activate_targets.join(", ");
 
   updateLabels();
+  updateSliderProgress(scaleEl);
+  updateSliderProgress(opacityEl);
   initPreview(settings.pet, settings.scale);
 
-  // 滑块实时更新标签 + 预览 + 防抖保存
+  // 滑块实时更新
   scaleEl.addEventListener("input", () => {
     updateLabels();
+    updateSliderProgress(scaleEl);
     updatePreviewSize(parseFloat(scaleEl.value));
     debouncedSave();
   });
   opacityEl.addEventListener("input", () => {
     updateLabels();
+    updateSliderProgress(opacityEl);
     debouncedSave();
   });
 
-  // 其他控件变更立即保存
-  petSelect.addEventListener("change", async () => {
-    await save();
-    // 切换预览宠物
-    previewAnimator?.destroy();
-    previewAnimator = null;
-    initPreview(petSelect.value, parseFloat(scaleEl.value));
-  });
   topEl.addEventListener("change", () => debouncedSave());
   targetsEl.addEventListener("change", () => debouncedSave());
 }
@@ -159,21 +200,21 @@ function updatePreviewSize(scale: number): void {
 // ── 会话列表 ────────────────────────────────────────────
 
 const STATE_COLORS: Record<string, string> = {
-  running: "#4a9eff",
-  needs_input: "#ff9f1c",
-  ready: "#40c057",
-  blocked: "#e03131",
-  idle: "#94a3b8",
-  sleep: "#9775fa",
+  running: "#5b7cfa",
+  needs_input: "#f5a623",
+  ready: "#34c759",
+  blocked: "#ff3b30",
+  idle: "#8e8e93",
+  sleep: "#af52de",
 };
 
 const STATE_LABELS: Record<string, string> = {
-  running: "🔵 Running",
-  needs_input: "🟡 Needs Input",
-  ready: "🟢 Ready",
-  blocked: "🔴 Blocked",
-  idle: "⚪ Idle",
-  sleep: "😴 Sleep",
+  running: "Running",
+  needs_input: "Needs Input",
+  ready: "Ready",
+  blocked: "Blocked",
+  idle: "Idle",
+  sleep: "Sleep",
 };
 
 async function refreshSessions(): Promise<void> {
@@ -184,22 +225,22 @@ async function refreshSessions(): Promise<void> {
       container.innerHTML = '<p class="empty-hint">暂无活跃会话。打开一个 ZCode 会话发条消息试试。</p>';
       return;
     }
-    container.innerHTML = sessions.map((s) => {
+    container.innerHTML = sessions.map((s, i) => {
       const state = s.effective_state || s.state;
-      const color = STATE_COLORS[state] || "#94a3b8";
+      const color = STATE_COLORS[state] || "#8e8e93";
       const label = STATE_LABELS[state] || state;
       const shortId = s.session_id.length > 24
         ? s.session_id.slice(0, 12) + "…" + s.session_id.slice(-6)
         : s.session_id;
       const project = s.project || "（未指定项目）";
       return `
-        <div class="session-card">
-          <div class="session-state-dot" style="background:${color}"></div>
+        <div class="session-card" style="animation-delay:${i * 0.06}s">
+          <div class="session-state-dot" style="background:${color};box-shadow:0 0 8px ${color}"></div>
           <div class="session-info">
             <div class="session-id">${shortId}</div>
             <div class="session-meta">${project}</div>
           </div>
-          <span class="session-state-tag" style="background:${color}22;color:${color}">${label}</span>
+          <span class="session-state-tag" style="background:${color}1a;color:${color}">${label}</span>
         </div>`;
     }).join("");
   } catch (e) {
@@ -213,14 +254,12 @@ async function main(): Promise<void> {
   setupTabs();
   await setupSettings();
 
-  // 监听状态变化，会话页打开时自动刷新
   await listen("pet://state-changed", () => {
     if (document.getElementById("tab-sessions")?.classList.contains("active")) {
       void refreshSessions();
     }
   });
 
-  // 前端加载完成，通知后端激活并显示主窗口
   await invoke("frontend_ready").catch(() => {});
 }
 
