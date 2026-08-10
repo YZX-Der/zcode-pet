@@ -10,14 +10,24 @@
     <div class="app-shell">
       <!-- 侧边栏 -->
       <aside class="sidebar" data-tauri-drag-region>
+        <div class="sidebar-glow"></div>
         <div class="brand">
-          <span class="brand-icon">🐾</span>
-          <span class="brand-name">zcode-pet</span>
+          <div class="brand-icon">🐾</div>
+          <div class="brand-name">zcode-pet</div>
         </div>
         <nav class="nav">
-          <button class="nav-item active" data-tab="settings">⚙️ 设置</button>
-          <button class="nav-item" data-tab="sessions">🖥️ 会话</button>
-          <button class="nav-item" data-tab="help">📖 说明</button>
+          <button class="nav-item active" data-tab="settings">
+            <span class="nav-icon">⚙</span>
+            <span class="nav-label">设置</span>
+          </button>
+          <button class="nav-item" data-tab="sessions">
+            <span class="nav-icon">▣</span>
+            <span class="nav-label">会话</span>
+          </button>
+          <button class="nav-item" data-tab="help">
+            <span class="nav-icon">?</span>
+            <span class="nav-label">说明</span>
+          </button>
         </nav>
       </aside>
 
@@ -25,60 +35,85 @@
       <main class="content">
         <!-- 设置页 -->
         <section id="tab-settings" class="tab-pane active">
-          <div class="settings-layout">
-            <div class="settings-form">
-              <h2>设置</h2>
+          <div class="page-header">
+            <h2>设置</h2>
+            <p class="page-subtitle">自定义你的桌面宠物</p>
+          </div>
 
+          <div class="settings-layout">
+            <div class="settings-form glass-card">
               <div class="field">
-                <label>宠物大小</label>
-                <div class="row">
+                <div class="field-header">
+                  <label>宠物大小</label>
+                  <span class="value" id="scale-val">100%</span>
+                </div>
+                <div class="slider-wrap">
                   <input type="range" id="scale" min="0.3" max="1.5" step="0.05" />
-                  <span class="value" id="scale-val">60%</span>
                 </div>
               </div>
 
               <div class="field">
-                <label>不透明度</label>
-                <div class="row">
-                  <input type="range" id="opacity" min="0.5" max="1.0" step="0.05" />
+                <div class="field-header">
+                  <label>不透明度</label>
                   <span class="value" id="opacity-val">100%</span>
                 </div>
+                <div class="slider-wrap">
+                  <input type="range" id="opacity" min="0.5" max="1.0" step="0.05" />
+                </div>
               </div>
 
               <div class="field">
-                <label>选择宠物</label>
-                <select id="pet-select"></select>
+                <div class="field-header">
+                  <label>选择宠物</label>
+                </div>
+                <div class="custom-select" id="pet-select-wrap">
+                  <button class="cs-trigger" type="button">
+                    <span class="cs-value">加载中...</span>
+                    <span class="cs-arrow">⌄</span>
+                  </button>
+                  <div class="cs-dropdown"></div>
+                  <select id="pet-select" style="display:none"></select>
+                </div>
               </div>
 
-              <div class="field">
+              <div class="field field-row">
                 <label>始终置顶</label>
                 <label class="toggle">
                   <input type="checkbox" id="always-on-top" />
-                  <span class="slider"></span>
+                  <span class="toggle-track"><span class="toggle-thumb"></span></span>
                 </label>
               </div>
 
               <div class="field">
-                <label>点击激活目标（按优先级）</label>
+                <div class="field-header">
+                  <label>点击激活目标</label>
+                </div>
                 <input type="text" id="activate-targets" class="text-input"
                   placeholder="ZCode, iTerm2, Terminal" />
+                <p class="field-hint">按优先级排列，逗号分隔</p>
               </div>
             </div>
 
             <!-- 预览区 -->
-            <div class="preview-panel">
-              <h3>预览</h3>
+            <div class="preview-panel glass-card">
+              <div class="preview-header">
+                <h3>实时预览</h3>
+                <div class="preview-badge">LIVE</div>
+              </div>
               <div class="preview-canvas-wrap">
                 <canvas id="preview-canvas"></canvas>
               </div>
-              <p class="preview-hint">拖动滑块实时查看效果</p>
+              <p class="preview-hint">拖动滑块即时查看效果</p>
             </div>
           </div>
         </section>
 
         <!-- 会话页 -->
         <section id="tab-sessions" class="tab-pane">
-          <h2>活跃会话</h2>
+          <div class="page-header">
+            <h2>活跃会话</h2>
+            <p class="page-subtitle">当前正在运行的 ZCode 会话</p>
+          </div>
           <div id="session-list" class="session-list">
             <p class="empty-hint">加载中...</p>
           </div>
@@ -86,36 +121,51 @@
 
         <!-- 说明页 -->
         <section id="tab-help" class="tab-pane">
-          <h2>使用说明</h2>
+          <div class="page-header">
+            <h2>使用说明</h2>
+            <p class="page-subtitle">快速上手 zcode-pet</p>
+          </div>
           <div class="help-content">
-            <div class="help-section">
-              <h3>1️⃣ 安装 Hooks 联动</h3>
-              <p>让宠物能自动响应 ZCode 任务状态变化：</p>
-              <pre>bash scripts/install.sh</pre>
+            <div class="help-section glass-card">
+              <div class="help-num">1</div>
+              <div class="help-body">
+                <h3>安装 Hooks 联动</h3>
+                <p>让宠物能自动响应 ZCode 任务状态变化：</p>
+                <pre>bash scripts/install.sh</pre>
+              </div>
             </div>
-            <div class="help-section">
-              <h3>2️⃣ 生成内置宠物</h3>
-              <p>生成 5 只像素宠物到用户目录：</p>
-              <pre>python3 tools/petgen.py build --out ~/.zcode-pet/pets</pre>
+            <div class="help-section glass-card">
+              <div class="help-num">2</div>
+              <div class="help-body">
+                <h3>生成内置宠物</h3>
+                <p>生成 5 只像素宠物到用户目录：</p>
+                <pre>python3 tools/petgen.py build --out ~/.zcode-pet/pets</pre>
+              </div>
             </div>
-            <div class="help-section">
-              <h3>3️⃣ 开始使用</h3>
-              <p>打开一个 ZCode 会话开始对话，宠物会自动出现在屏幕右下角，并根据任务状态切换动画。</p>
-              <ul>
-                <li><b>点击</b>宠物 → 跳回 ZCode 窗口</li>
-                <li><b>拖拽</b>宠物 → 移动位置</li>
-                <li><b>关闭主窗口</b> → 隐藏到托盘，宠物继续运行</li>
-              </ul>
+            <div class="help-section glass-card">
+              <div class="help-num">3</div>
+              <div class="help-body">
+                <h3>开始使用</h3>
+                <p>打开一个 ZCode 会话开始对话，宠物会自动出现在屏幕右下角，并根据任务状态切换动画。</p>
+                <ul>
+                  <li><b>点击</b>宠物 → 跳回 ZCode 窗口</li>
+                  <li><b>拖拽</b>宠物 → 移动位置</li>
+                  <li><b>关闭主窗口</b> → 隐藏到托盘，宠物继续运行</li>
+                </ul>
+              </div>
             </div>
-            <div class="help-section">
-              <h3>4️⃣ 状态说明</h3>
-              <table class="state-table">
-                <tr><td>🔵 Running</td><td>任务执行中</td></tr>
-                <tr><td>🟡 Needs Input</td><td>等待确认权限</td></tr>
-                <tr><td>🟢 Ready</td><td>任务完成</td></tr>
-                <tr><td>🔴 Blocked</td><td>执行出错</td></tr>
-                <tr><td>😴 Sleep</td><td>长时间无活动</td></tr>
-              </table>
+            <div class="help-section glass-card">
+              <div class="help-num">4</div>
+              <div class="help-body">
+                <h3>状态说明</h3>
+                <div class="state-grid">
+                  <div class="state-item"><span class="state-dot s-running"></span>Running<span class="state-desc">任务执行中</span></div>
+                  <div class="state-item"><span class="state-dot s-needs"></span>Needs Input<span class="state-desc">等待确认</span></div>
+                  <div class="state-item"><span class="state-dot s-ready"></span>Ready<span class="state-desc">任务完成</span></div>
+                  <div class="state-item"><span class="state-dot s-blocked"></span>Blocked<span class="state-desc">执行出错</span></div>
+                  <div class="state-item"><span class="state-dot s-sleep"></span>Sleep<span class="state-desc">无活动</span></div>
+                </div>
+              </div>
             </div>
           </div>
         </section>
