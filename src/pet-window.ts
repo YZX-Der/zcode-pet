@@ -15,6 +15,8 @@ let interactionBound = false;
 // 当前最新状态：pet://state 事件更新它；
 // 热更新（updatePet）时优先用它，避免回退到 __PET_INIT__ 的初始快照
 let currentState: PetStateName | null = null;
+// 用户设置的基础不透明度（sleep 时在此基础上变淡）
+let baseOpacity = 1;
 
 function getInit() {
   return (window as any).__PET_INIT__ as {
@@ -24,6 +26,11 @@ function getInit() {
     scale?: number;
     opacity?: number;
   } | undefined;
+}
+
+/** 根据状态计算实际不透明度：sleep 变淡，其他恢复正常 */
+function effectiveOpacity(state: PetStateName, opacity: number): number {
+  return state === "sleep" ? opacity * 0.35 : opacity;
 }
 
 async function loadAndRender(): Promise<void> {
@@ -36,6 +43,7 @@ async function loadAndRender(): Promise<void> {
   const sheetPath = init.sheet;
   const scale = init.scale ?? 1;
   const opacity = init.opacity ?? 1;
+  baseOpacity = opacity;
 
   // 加载 manifest
   const manifestUrl = convertFileSrc(sheetPath.replace(/spritesheet\.\w+$/, "pet.json"));
@@ -46,7 +54,7 @@ async function loadAndRender(): Promise<void> {
 
   // 获取 canvas（始终用同一个 DOM 元素，不 clone）
   const canvas = document.getElementById("pet") as HTMLCanvasElement;
-  canvas.style.opacity = String(opacity);
+  canvas.style.opacity = String(effectiveOpacity(currentState ?? init.state, opacity));
 
   // 销毁旧 animator
   if (animator) {
@@ -67,6 +75,8 @@ async function loadAndRender(): Promise<void> {
   unsubListener = await listen<StatePayload>("pet://state", (event) => {
     currentState = event.payload.state;
     animator?.setState(event.payload.state);
+    // sleep 状态变淡，其他状态恢复用户设置的不透明度
+    canvas.style.opacity = String(effectiveOpacity(event.payload.state, baseOpacity));
   });
 
   // 只绑一次交互事件

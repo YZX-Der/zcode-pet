@@ -302,6 +302,13 @@ async function main(): Promise<void> {
     }
   });
 
+  // 会话页定时刷新，保持状态/当前会话标记最新
+  setInterval(() => {
+    if (document.getElementById("tab-sessions")?.classList.contains("active")) {
+      void refreshSessions();
+    }
+  }, 5000);
+
   await invoke("frontend_ready").catch(() => {});
 }
 

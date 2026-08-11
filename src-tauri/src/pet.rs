@@ -1,6 +1,7 @@
 //! 宠物路径解析与状态文件读写。
 
 use std::path::{Path, PathBuf};
+use std::time::SystemTime;
 
 /// 状态文件反序列化结构 —— 对应 docs/03-state-protocol.md
 #[derive(Clone, serde::Deserialize)]
@@ -97,4 +98,40 @@ pub fn session_id_from_path(path: &Path) -> Option<String> {
 pub fn session_label(session_id: &str) -> String {
     let prefix = &session_id[..session_id.len().min(12)];
     format!("pet-{prefix}")
+}
+
+/// 识别 ZCode 当前活跃会话：rollout 目录下最近修改的 sess_* 文件对应的 session_id。
+///
+/// rollout 文件（~/.zcode/cli/rollout/model-io-sess_<id>.jsonl）每次模型 IO 都会更新，
+/// 比状态文件 ts 和 bot-state.activeTaskId 更实时。subagent 文件不算用户会话，排除。
+/// 目录不可用时返回 None。
+pub fn current_session_id() -> Option<String> {
+    let dir = home().join(".zcode").join("cli").join("rollout");
+    let mut latest: Option<(SystemTime, String)> = None;
+    for entry in std::fs::read_dir(&dir).ok()?.flatten() {
+        let path = entry.path();
+        let name = match path.file_name().and_then(|n| n.to_str()) {
+            Some(n) => n,
+            None => continue,
+        };
+        // model-io-sess_<id>.jsonl -> sess_<id>
+        let session_id = match name
+            .strip_prefix("model-io-")
+            .and_then(|s| s.strip_suffix(".jsonl"))
+        {
+            Some(s) if s.starts_with("sess_") => s.to_string(),
+            _ => continue,
+        };
+        if session_id.contains("subagent") {
+            continue;
+        }
+        let mtime = match entry.metadata().and_then(|m| m.modified()) {
+            Ok(t) => t,
+            Err(_) => continue,
+        };
+        if latest.as_ref().map_or(true, |(t, _)| mtime > *t) {
+            latest = Some((mtime, session_id));
+        }
+    }
+    latest.map(|(_, id)| id)
 }

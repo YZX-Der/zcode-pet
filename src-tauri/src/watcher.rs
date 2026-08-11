@@ -96,6 +96,8 @@ pub fn start_decay_timer(app: AppHandle) {
 /// 应用衰减规则：更新窗口状态、回收失联会话。
 fn apply_decay(app: &AppHandle) {
     let now = chrono::Utc::now().timestamp();
+    // 当前活跃会话豁免回收：即使长时间无事件也保持（变淡显示），不消失
+    let current_sid = pet::current_session_id();
     let mut dead_sessions = Vec::new();
 
     {
@@ -105,8 +107,8 @@ fn apply_decay(app: &AppHandle) {
         for (session_id, entry) in sessions.iter_mut() {
             let effective = window::effective_state(&entry.raw_state, entry.ts);
 
-            // R3: 1800s 无事件 -> 会话死亡
-            if now - entry.ts > 1800 {
+            // R3: 1800s 无事件 -> 会话死亡（当前会话豁免，保持淡显示不回收）
+            if now - entry.ts > 1800 && current_sid.as_deref() != Some(session_id.as_str()) {
                 dead_sessions.push(session_id.clone());
                 continue;
             }
