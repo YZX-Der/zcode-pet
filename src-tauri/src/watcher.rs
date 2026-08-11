@@ -31,7 +31,7 @@ fn handle_state_file(app: &AppHandle, path: &Path) {
         );
     }
 
-    window::ensure_window(app, &state.session_id, &state.state);
+    window::ensure_window(app, &state.session_id, &state.state, false);
 }
 
 /// 启动文件监听器（独立线程，debounce 200ms）。

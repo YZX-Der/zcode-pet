@@ -68,10 +68,12 @@ pub fn is_active_state(effective: &str) -> bool {
 }
 
 /// 为一个会话创建宠物浮窗（若尚未存在）。
-pub fn ensure_window(app: &AppHandle, session_id: &str, state: &str) {
+///
+/// `force` 为 true 时跳过「仅执行中状态才创建」的检查，用于用户手动打开桌宠。
+pub fn ensure_window(app: &AppHandle, session_id: &str, state: &str, force: bool) {
     let label = pet::session_label(session_id);
 
-    // 已存在 → 只更新状态
+    // 已存在 -> 只更新状态
     if let Some(window) = app.get_webview_window(&label) {
         let _ = window.emit("pet://state", StatePayload {
             state: effective_state(state, chrono::Utc::now().timestamp()),
@@ -79,8 +81,9 @@ pub fn ensure_window(app: &AppHandle, session_id: &str, state: &str) {
         return;
     }
 
-    // 尚未有窗口：仅执行中的任务创建（idle/ready 不创建，靠衰减规则渐隐回收）
-    if !should_create_window(state) {
+    // 尚未有窗口：仅执行中的任务创建（idle/ready 不创建，靠衰减规则渐隐回收）；
+    // force（用户手动打开）时跳过此检查
+    if !force && !should_create_window(state) {
         return;
     }
 
@@ -272,7 +275,7 @@ pub fn scan_and_create(app: &AppHandle) {
                             },
                         );
                     }
-                    ensure_window(app, &state.session_id, &state.state);
+                    ensure_window(app, &state.session_id, &state.state, false);
                 }
             }
         }
