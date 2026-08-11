@@ -202,7 +202,6 @@ pub fn run() {
             settings::list_pets,
             dashboard::list_sessions,
             dashboard::set_pet_visible,
-            dashboard::close_session,
             dashboard::get_pet_sheet,
             cmd::frontend_ready
         ])

@@ -84,6 +84,14 @@
                 </label>
               </div>
 
+              <div class="field field-row">
+                <label>显示桌宠</label>
+                <label class="toggle">
+                  <input type="checkbox" id="pet-visible" checked />
+                  <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                </label>
+              </div>
+
               <div class="field">
                 <div class="field-header">
                   <label>点击激活目标</label>
@@ -112,7 +120,7 @@
         <section id="tab-sessions" class="tab-pane">
           <div class="page-header">
             <h2>活跃会话</h2>
-            <p class="page-subtitle">正在执行任务的 ZCode 会话。🐾 可单独开关桌宠，✕ 清理会话记录</p>
+            <p class="page-subtitle">当前的 ZCode 会话状态。长时间无活动的会话会自动清理</p>
           </div>
           <div id="session-list" class="session-list">
             <p class="empty-hint">加载中...</p>
