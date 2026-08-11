@@ -140,11 +140,11 @@ pub fn set_pet_enabled(app: AppHandle, session_id: String, enabled: bool) -> Res
     settings::save(&cfg)?;
 
     if enabled {
-        // 重新打开：若该会话状态文件仍在（执行中）则重建宠物窗口
+        // 重新打开：若该会话状态文件仍在则强制重建宠物窗口（不管当前状态）
         let state_file = pet::state_dir().join(format!("{session_id}.json"));
         if let Ok(content) = std::fs::read_to_string(&state_file) {
             if let Ok(sf) = serde_json::from_str::<pet::StateFile>(&content) {
-                crate::window::ensure_window(&app, &sf.session_id, &sf.state);
+                crate::window::ensure_window(&app, &sf.session_id, &sf.state, true);
             }
         }
     } else {
