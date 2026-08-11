@@ -20,9 +20,6 @@ pub struct Settings {
     /// 是否始终置顶
     #[serde(default = "default_true")]
     pub always_on_top: bool,
-    /// 点击激活的目标应用优先级列表
-    #[serde(default = "default_activate_targets")]
-    pub activate_targets: Vec<String>,
     /// 桌宠全局开关（false=显示，true=隐藏）
     #[serde(default)]
     pub pet_hidden: bool,
@@ -40,13 +37,6 @@ fn default_pet() -> String {
 fn default_true() -> bool {
     true
 }
-fn default_activate_targets() -> Vec<String> {
-    vec![
-        "ZCode".into(),
-        "iTerm2".into(),
-        "Terminal".into(),
-    ]
-}
 
 impl Default for Settings {
     fn default() -> Self {
@@ -55,7 +45,6 @@ impl Default for Settings {
             opacity: default_opacity(),
             pet: default_pet(),
             always_on_top: default_true(),
-            activate_targets: default_activate_targets(),
             pet_hidden: false,
         }
     }
@@ -104,7 +93,6 @@ pub fn save_settings(app: AppHandle, settings: Settings) -> Result<Settings, Str
     merged.opacity = settings.opacity;
     merged.pet = settings.pet.clone();
     merged.always_on_top = settings.always_on_top;
-    merged.activate_targets = settings.activate_targets;
     save(&merged)?;
     // 更新全局 pet_name
     let state = app.state::<crate::AppState>();

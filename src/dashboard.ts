@@ -13,7 +13,6 @@ interface Settings {
   pet: string;
   always_on_top: boolean;
   pet_hidden: boolean;
-  activate_targets: string[];
 }
 
 interface SessionInfo {
@@ -76,7 +75,6 @@ async function setupSettings(): Promise<void> {
   const csDropdown = csWrap.querySelector(".cs-dropdown") as HTMLElement;
   const topEl = document.getElementById("always-on-top") as HTMLInputElement;
   const petVisibleEl = document.getElementById("pet-visible") as HTMLInputElement;
-  const targetsEl = document.getElementById("activate-targets") as HTMLInputElement;
 
   // 构建自定义下拉选项
   csDropdown.innerHTML = pets.map((name) =>
@@ -117,7 +115,6 @@ async function setupSettings(): Promise<void> {
   opacityEl.value = String(settings.opacity);
   topEl.checked = settings.always_on_top;
   petVisibleEl.checked = !settings.pet_hidden;
-  targetsEl.value = settings.activate_targets.join(", ");
 
   updateLabels();
   updateSliderProgress(scaleEl);
@@ -141,7 +138,6 @@ async function setupSettings(): Promise<void> {
   petVisibleEl.addEventListener("change", () => {
     void invoke("set_pet_visible", { visible: petVisibleEl.checked });
   });
-  targetsEl.addEventListener("change", () => debouncedSave());
 }
 
 function updateLabels(): void {
@@ -163,7 +159,6 @@ async function save(): Promise<void> {
   const opacityEl = document.getElementById("opacity") as HTMLInputElement;
   const petSelect = document.getElementById("pet-select") as HTMLSelectElement;
   const topEl = document.getElementById("always-on-top") as HTMLInputElement;
-  const targetsEl = document.getElementById("activate-targets") as HTMLInputElement;
 
   // pet_hidden 不在此处保存（由 set_pet_visible 命令管理，避免覆盖）
   const newSettings: Omit<Settings, "pet_hidden"> = {
@@ -171,7 +166,6 @@ async function save(): Promise<void> {
     opacity: parseFloat(opacityEl.value),
     pet: petSelect.value,
     always_on_top: topEl.checked,
-    activate_targets: targetsEl.value.split(",").map((s) => s.trim()).filter(Boolean),
   };
 
   try {
