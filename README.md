@@ -6,7 +6,9 @@
 
 ## 截图
 
-![zcode-pet 设置面板](docs/screenshots/settings-thumb.png)
+![zbuddy 宠物预览](docs/screenshots/zbuddy-preview.png)
+
+> 内置 5 只像素宠物：zbuddy、shiba、ducky、slime、rocky
 
 ## 特性
 
