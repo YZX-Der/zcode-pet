@@ -671,6 +671,23 @@ input[type="range"]:active::-webkit-slider-thumb {
   background: var(--glass-bg-hover);
 }
 
+/* 当前活跃会话高亮 */
+.session-card.is-current {
+  border-color: #5b7cfa66;
+  box-shadow: 0 0 0 1px #5b7cfa33, var(--glass-shadow);
+}
+.session-current-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 7px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #5b7cfa;
+  background: #5b7cfa1a;
+  border-radius: var(--radius-sm);
+  vertical-align: middle;
+}
+
 @keyframes card-enter {
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
