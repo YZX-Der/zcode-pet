@@ -273,7 +273,7 @@ html, body {
 
 .settings-form {
   flex: 1;
-  max-width: 480px;
+  min-width: 0;
   padding: 28px 30px;
 }
 
@@ -516,8 +516,7 @@ input[type="range"]:active::-webkit-slider-thumb {
 
 /* ── 预览面板 ──────────────────────────────────────── */
 .preview-panel {
-  width: 240px;
-  flex-shrink: 0;
+  flex: 0 0 260px;
   padding: 20px;
   text-align: center;
 }
@@ -587,7 +586,7 @@ input[type="range"]:active::-webkit-slider-thumb {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  max-width: 680px;
+  width: 100%;
 }
 
 .session-card {
@@ -734,7 +733,7 @@ input[type="range"]:active::-webkit-slider-thumb {
 
 /* ── 说明页 ──────────────────────────────────────── */
 .help-content {
-  max-width: 640px;
+  width: 100%;
   display: flex;
   flex-direction: column;
   gap: 14px;
