@@ -23,6 +23,8 @@ tokio = { version = "1", features = ["rt-multi-thread", "time", "macros", "sync"
 dirs = "5"
 chrono = "0.4"
 log = "0.4"
+# 读 ZCode 会话索引（tasks-index.sqlite）取任务名；默认链接系统 sqlite3
+rusqlite = "0.32"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc = "0.2"

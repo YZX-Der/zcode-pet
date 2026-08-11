@@ -62,6 +62,11 @@ pub fn should_create_window(state: &str) -> bool {
     matches!(state, "running" | "needs_input" | "blocked")
 }
 
+/// 会话是否处于执行中（有效状态）——会话列表展示用。
+pub fn is_active_state(effective: &str) -> bool {
+    matches!(effective, "running" | "needs_input" | "blocked")
+}
+
 /// 为一个会话创建宠物浮窗（若尚未存在）。
 pub fn ensure_window(app: &AppHandle, session_id: &str, state: &str) {
     let label = pet::session_label(session_id);
@@ -76,6 +81,16 @@ pub fn ensure_window(app: &AppHandle, session_id: &str, state: &str) {
 
     // 尚未有窗口：仅执行中的任务创建（idle/ready 不创建，靠衰减规则渐隐回收）
     if !should_create_window(state) {
+        return;
+    }
+
+    // 用户手动禁用了该会话的桌宠 → 不创建
+    if crate::settings::load()
+        .disabled_sessions
+        .iter()
+        .any(|s| s == session_id)
+    {
+        log::info!("pet disabled for session {session_id}, skipping window");
         return;
     }
 
@@ -192,6 +207,21 @@ pub fn close_window(app: &AppHandle, session_id: &str) {
         let _ = window.close();
         log::info!("closed pet window '{label}'");
     }
+}
+
+/// 关闭一个会话：关窗 + 删状态文件 + 移出 managed state。
+///
+/// 若该会话在 ZCode 中仍在执行，后续事件会重新写入状态文件并恢复。
+pub fn close_session(app: &AppHandle, session_id: &str) {
+    close_window(app, session_id);
+    let file = pet::state_dir().join(format!("{session_id}.json"));
+    let _ = std::fs::remove_file(&file);
+    {
+        let app_state = app.state::<crate::AppState>();
+        let mut sessions = app_state.sessions.lock().unwrap();
+        sessions.remove(session_id);
+    }
+    log::info!("closed session {session_id}");
 }
 
 /// 计算下一个窗口位置：从右下角向上堆叠。
@@ -320,7 +350,7 @@ pub fn recreate_all(app: &AppHandle) {
 
 #[cfg(test)]
 mod tests {
-    use super::{compute_effective_state, should_create_window};
+    use super::{compute_effective_state, is_active_state, should_create_window};
 
     const NOW: i64 = 10_000;
 
@@ -333,6 +363,16 @@ mod tests {
         assert!(!should_create_window("idle"));
         assert!(!should_create_window("ready"));
         assert!(!should_create_window("sleep"));
+    }
+
+    #[test]
+    fn test_active_state_list_filter() {
+        assert!(is_active_state("running"));
+        assert!(is_active_state("needs_input"));
+        assert!(is_active_state("blocked"));
+        assert!(!is_active_state("idle"));
+        assert!(!is_active_state("ready"));
+        assert!(!is_active_state("sleep"));
     }
 
     #[test]

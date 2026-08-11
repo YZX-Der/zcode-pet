@@ -27,3 +27,4 @@ __pycache__/
 
 # Tauri 自动生成的 schema（每次构建变化，无需提交）
 src-tauri/gen/
+.zcode/

@@ -77,6 +77,13 @@
 
 > R2/R3 的考量：长时间运行的 Bash 命令期间不会产生任何事件，因此 running 不单独设短超时，统一由 R2/R3 兜底；ZCode 崩溃（无 Stop）导致的孤儿会话由 R3 回收。
 
+## 4.1 会话管理（Dashboard）
+
+- **活跃定义**：仅 `running` / `needs_input` / `blocked`（有效状态）算执行中；会话列表只展示执行中的会话，任务完成后自动移出列表（桌宠按 R1-R3 渐隐回收）。
+- **桌宠开关**：按会话持久化在 `~/.zcode-pet/config.json` 的 `disabled_sessions`；被禁用的会话不再创建宠物窗口（已有窗口立即关闭），重新打开后如仍在执行则恢复。
+- **关闭会话**：立即关闭宠物窗口、删除状态文件、移出列表；若该会话在 ZCode 中仍在执行，后续事件会重新写入状态文件并恢复。
+- **任务名**：从 ZCode 会话索引 `~/.zcode/v2/tasks-index.sqlite`（`tasks.title`）读取，与 `session_id` 一一对应；数据库不可用或尚未生成标题时 fallback 到项目名。
+
 ## 5. 写入规范（hook 脚本）
 
 1. 从环境变量读取：`CLAUDE_SESSION_ID`（会话 ID）、`CLAUDE_PROJECT_DIR`（项目目录）；事件名与可选工具名来自命令行参数。
