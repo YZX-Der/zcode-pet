@@ -16,8 +16,6 @@ pub struct SessionInfo {
     pub project: Option<String>,
     /// 任务名（ZCode tasks-index.sqlite 中的会话标题，fallback 项目名）
     pub title: String,
-    /// 桌宠是否显示（全局开关）
-    pub pet_visible: bool,
     /// 是否为 ZCode 当前活跃会话（最近有模型 IO 的会话）
     pub is_current: bool,
     pub ts: i64,
@@ -68,13 +66,12 @@ fn fetch_task_titles(session_ids: &[String]) -> HashMap<String, String> {
 /// 列出会话及其状态（供 Dashboard 会话页展示）。
 ///
 /// 展示范围：非 sleep 的会话（idle/running/needs_input/ready/blocked）∪ 当前活跃会话
-/// （当前会话即使 sleep 也显示，让用户能管理正在用的会话）。
+/// （当前会话即使 sleep 也显示，让用户能看到正在用的会话）。
 #[tauri::command]
 pub fn list_sessions() -> Vec<SessionInfo> {
     let state_dir = pet::state_dir();
     let now = chrono::Utc::now().timestamp();
     let current_sid = pet::current_session_id();
-    let pet_hidden = settings::load().pet_hidden;
     let mut sessions = Vec::new();
 
     if let Ok(entries) = std::fs::read_dir(&state_dir) {
@@ -97,7 +94,6 @@ pub fn list_sessions() -> Vec<SessionInfo> {
                 state: sf.state,
                 project: sf.project,
                 title: String::new(),
-                pet_visible: !pet_hidden,
                 is_current,
                 ts: sf.ts,
             });
@@ -131,13 +127,6 @@ pub fn set_pet_visible(app: AppHandle, visible: bool) -> Result<(), String> {
     settings::save(&cfg)?;
     crate::window::set_pet_visible(&app, visible);
     Ok(())
-}
-
-/// 关闭一条会话：删状态文件 + 移出列表。
-/// 若该会话在 ZCode 中仍在执行，后续事件会重新出现。
-#[tauri::command]
-pub fn close_session(app: AppHandle, session_id: String) {
-    crate::window::close_session(&app, &session_id);
 }
 
 /// 返回指定宠物的精灵表绝对路径（供 Dashboard 预览使用）。

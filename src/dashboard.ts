@@ -12,6 +12,7 @@ interface Settings {
   opacity: number;
   pet: string;
   always_on_top: boolean;
+  pet_hidden: boolean;
   activate_targets: string[];
 }
 
@@ -21,7 +22,6 @@ interface SessionInfo {
   effective_state: string;
   project: string | null;
   title: string;
-  pet_visible: boolean;
   is_current: boolean;
   ts: number;
 }
@@ -75,6 +75,7 @@ async function setupSettings(): Promise<void> {
   const csValue = csWrap.querySelector(".cs-value") as HTMLElement;
   const csDropdown = csWrap.querySelector(".cs-dropdown") as HTMLElement;
   const topEl = document.getElementById("always-on-top") as HTMLInputElement;
+  const petVisibleEl = document.getElementById("pet-visible") as HTMLInputElement;
   const targetsEl = document.getElementById("activate-targets") as HTMLInputElement;
 
   // 构建自定义下拉选项
@@ -115,6 +116,7 @@ async function setupSettings(): Promise<void> {
   scaleEl.value = String(settings.scale);
   opacityEl.value = String(settings.opacity);
   topEl.checked = settings.always_on_top;
+  petVisibleEl.checked = !settings.pet_hidden;
   targetsEl.value = settings.activate_targets.join(", ");
 
   updateLabels();
@@ -136,6 +138,9 @@ async function setupSettings(): Promise<void> {
   });
 
   topEl.addEventListener("change", () => debouncedSave());
+  petVisibleEl.addEventListener("change", () => {
+    void invoke("set_pet_visible", { visible: petVisibleEl.checked });
+  });
   targetsEl.addEventListener("change", () => debouncedSave());
 }
 
@@ -160,7 +165,8 @@ async function save(): Promise<void> {
   const topEl = document.getElementById("always-on-top") as HTMLInputElement;
   const targetsEl = document.getElementById("activate-targets") as HTMLInputElement;
 
-  const newSettings: Settings = {
+  // pet_hidden 不在此处保存（由 set_pet_visible 命令管理，避免覆盖）
+  const newSettings: Omit<Settings, "pet_hidden"> = {
     scale: parseFloat(scaleEl.value),
     opacity: parseFloat(opacityEl.value),
     pet: petSelect.value,
@@ -239,11 +245,6 @@ async function refreshSessions(): Promise<void> {
       const title = s.title || shortId;
       const currentCls = s.is_current ? " is-current" : "";
       const currentBadge = s.is_current ? '<span class="session-current-badge">当前</span>' : "";
-      // 桌宠全局开关只在当前会话显示
-      const petToggle = s.is_current
-        ? `<button class="session-action pet-toggle ${s.pet_visible ? "on" : "off"}" data-action="toggle-pet" data-session="${s.session_id}"
-            title="${s.pet_visible ? "隐藏桌宠" : "显示桌宠"}">🐾</button>`
-        : "";
       return `
         <div class="session-card${currentCls}" style="animation-delay:${i * 0.06}s">
           <div class="session-state-dot" style="background:${color};box-shadow:0 0 8px ${color}"></div>
@@ -251,36 +252,9 @@ async function refreshSessions(): Promise<void> {
             <div class="session-title" title="${escapeHtml(title)}">${escapeHtml(title)}${currentBadge}</div>
             <div class="session-meta">${escapeHtml(shortId)}${project ? ` · ${escapeHtml(project)}` : ""}</div>
           </div>
-          <div class="session-actions">
-            <span class="session-state-tag" style="background:${color}1a;color:${color}">${label}</span>
-            ${petToggle}
-            <button class="session-action session-close" data-action="close-session" data-session="${s.session_id}"
-              title="关闭该会话（清理状态记录）">✕</button>
-          </div>
+          <span class="session-state-tag" style="background:${color}1a;color:${color}">${label}</span>
         </div>`;
     }).join("");
-
-    // 事件委托：桌宠开关（全局） / 关闭会话
-    container.onclick = async (e) => {
-      const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-action]");
-      if (!btn) return;
-      const sessionId = btn.dataset.session!;
-      const action = btn.dataset.action!;
-      btn.disabled = true;
-      try {
-        if (action === "toggle-pet") {
-          // 全局开关：当前状态决定切换方向
-          const visible = btn.classList.contains("off");
-          await invoke("set_pet_visible", { visible });
-        } else if (action === "close-session") {
-          await invoke("close_session", { sessionId });
-        }
-      } catch (err) {
-        console.error(`${action} failed:`, err);
-      } finally {
-        await refreshSessions();
-      }
-    };
   } catch (e) {
     container.innerHTML = `<p class="empty-hint">加载失败: ${e}</p>`;
   }
