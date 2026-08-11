@@ -31,7 +31,9 @@ fn handle_state_file(app: &AppHandle, path: &Path) {
         );
     }
 
-    window::ensure_window(app, &state.session_id, &state.state, false);
+    window::ensure_window(app, &state.session_id, &state.state, true);
+    // 收到状态事件 = 用户正在操作该会话 = 当前会话：关闭其他桌宠（单一桌宠模式）
+    window::close_non_current_windows_except(app, &state.session_id);
 }
 
 /// 启动文件监听器（独立线程，debounce 200ms）。
@@ -100,8 +102,10 @@ fn apply_decay(app: &AppHandle) {
     let current_sid = pet::current_session_id();
     let mut dead_sessions = Vec::new();
 
-    // 单一桌宠模式：关闭非当前会话的桌宠窗口（切换会话后清理旧桌宠）
-    window::close_non_current_windows(app);
+    // 单一桌宠模式：关闭非当前会话的桌宠窗口（兜底，处理切换后无新事件的情况）
+    if let Some(cur) = &current_sid {
+        window::close_non_current_windows_except(app, cur);
+    }
 
     {
         let app_state = app.state::<crate::AppState>();

@@ -147,6 +147,8 @@ pub fn set_pet_enabled(app: AppHandle, session_id: String, enabled: bool) -> Res
                 crate::window::ensure_window(&app, &sf.session_id, &sf.state, true);
             }
         }
+        // 单一桌宠模式：切换到该会话，关闭其他桌宠
+        crate::window::close_non_current_windows_except(&app, &session_id);
     } else {
         crate::window::close_window(&app, &session_id);
     }

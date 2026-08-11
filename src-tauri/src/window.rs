@@ -69,14 +69,9 @@ pub fn is_active_state(effective: &str) -> bool {
 
 /// 为一个会话创建宠物浮窗（若尚未存在）。
 ///
-/// 单一桌宠模式：只为当前活跃会话创建窗口，其他会话不显示桌宠。
-/// `force` 为 true 时跳过「仅执行中状态才创建」的检查，用于用户手动打开桌宠。
+/// `force` 为 true 时跳过「仅执行中状态才创建」的检查，用于用户手动打开、
+/// 或收到状态事件时（收到事件即视为当前会话）强制创建。
 pub fn ensure_window(app: &AppHandle, session_id: &str, state: &str, force: bool) {
-    // 单一桌宠模式：非当前活跃会话不创建/更新桌宠
-    if pet::current_session_id().as_deref() != Some(session_id) {
-        return;
-    }
-
     let label = pet::session_label(session_id);
 
     // 已存在 -> 只更新状态
@@ -88,7 +83,7 @@ pub fn ensure_window(app: &AppHandle, session_id: &str, state: &str, force: bool
     }
 
     // 尚未有窗口：仅执行中的任务创建（idle/ready 不创建，靠衰减规则渐隐回收）；
-    // force（用户手动打开）时跳过此检查
+    // force 时跳过此检查
     if !force && !should_create_window(state) {
         return;
     }
@@ -169,9 +164,6 @@ pub fn ensure_window(app: &AppHandle, session_id: &str, state: &str, force: bool
         Ok(window) => {
             log::info!("created pet window '{label}' ({frame_w}x{frame_h})");
 
-            // 单一桌宠模式：创建新窗口后关闭其他非当前会话的桌宠
-            close_non_current_windows(app);
-
             // macOS: 提升窗口级别到全屏之上，并设置跨 Space 显示。
             //
             // 注意：ensure_window 可能被 watcher 线程（后台线程）调用，
@@ -236,16 +228,15 @@ pub fn close_session(app: &AppHandle, session_id: &str) {
     log::info!("closed session {session_id}");
 }
 
-/// 关闭所有非当前活跃会话的桌宠窗口（单一桌宠模式：只保留当前会话的桌宠）。
+/// 关闭除指定会话外的所有桌宠窗口（单一桌宠模式：只保留一个桌宠）。
 /// 不删除状态文件、不移出 sessions map（会话仍在，只是不显示桌宠）。
-pub fn close_non_current_windows(app: &AppHandle) {
-    let current = pet::current_session_id();
+pub fn close_non_current_windows_except(app: &AppHandle, except: &str) {
     let to_close: Vec<String> = {
         let app_state = app.state::<crate::AppState>();
         let sessions = app_state.sessions.lock().unwrap();
         sessions
             .keys()
-            .filter(|sid| current.as_deref() != Some(sid.as_str()))
+            .filter(|sid| sid.as_str() != except)
             .map(|sid| pet::session_label(sid))
             .collect()
     };
@@ -285,6 +276,7 @@ fn next_position(app: &AppHandle) -> Option<(f64, f64)> {
 /// 扫描现有状态文件并为每个活跃会话创建窗口。
 pub fn scan_and_create(app: &AppHandle) {
     let state_dir = pet::state_dir();
+    let current_sid = pet::current_session_id();
     if let Ok(entries) = std::fs::read_dir(&state_dir) {
         for entry in entries.flatten() {
             let path = entry.path();
@@ -305,7 +297,10 @@ pub fn scan_and_create(app: &AppHandle) {
                             },
                         );
                     }
-                    ensure_window(app, &state.session_id, &state.state, false);
+                    // 单一桌宠模式：启动时只为当前活跃会话创建窗口
+                    if current_sid.as_deref() == Some(state.session_id.as_str()) {
+                        ensure_window(app, &state.session_id, &state.state, true);
+                    }
                 }
             }
         }
