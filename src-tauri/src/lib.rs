@@ -171,7 +171,11 @@ pub fn run() {
             .inner_size(960.0, 640.0)
             .min_inner_size(800.0, 520.0)
             .center()
-            .visible(true);
+            .visible(true)
+            // macOS: 标题栏 Overlay 模式——webview 延伸到标题栏区域，
+            // 原生交通灯按钮浮在透明玻璃背景上（液态玻璃效果）
+            .title_bar_style(tauri::TitleBarStyle::Overlay)
+            .hidden_title(true);
 
             match main_window.build() {
                 Ok(_) => log::info!("main window created"),
