@@ -384,120 +384,60 @@ input[type="range"]:active::-webkit-slider-thumb {
 /* ── 下拉选择 ──────────────────────────────────────── */
 
 /* 自定义下拉组件（绕过 WKWebView 原生 option 样式限制） */
-.custom-select {
-  position: relative;
-  width: 100%;
+/* ── 宠物图片网格 ──────────────────────────────────── */
+.pet-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+  gap: 10px;
 }
-
-.cs-trigger {
-  width: 100%;
+.pet-card {
+  position: relative;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: space-between;
-  padding: 10px 14px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  gap: 4px;
+  padding: 10px 6px 8px;
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius-md);
-  font-size: 14px;
-  font-weight: 500;
-  font-family: inherit;
-  background: rgba(255, 255, 255, 0.6);
-  color: var(--text);
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
   cursor: pointer;
   transition: all 0.25s var(--ease-smooth);
 }
-
-.cs-trigger:hover {
-  background: rgba(255, 255, 255, 0.85);
-  border-color: var(--accent-glow);
+.pet-card:hover {
+  transform: translateY(-2px);
+  background: var(--glass-bg-hover);
+  box-shadow: var(--glass-shadow-hover);
 }
-
-.custom-select.open .cs-trigger {
+.pet-card.selected {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft);
-  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 0 0 2px var(--accent-soft), var(--glass-shadow);
+  background: var(--accent-soft);
 }
-
-.cs-value {
-  flex: 1;
-  text-align: left;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.pet-card-canvas {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+.pet-card-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
   white-space: nowrap;
 }
-
-.cs-arrow {
-  font-size: 14px;
-  color: var(--text-tertiary);
-  transition: transform 0.3s var(--ease-spring);
-  margin-left: 8px;
-}
-
-.custom-select.open .cs-arrow {
-  transform: rotate(180deg);
+.pet-card.selected .pet-card-name {
   color: var(--accent);
 }
-
-/* 下拉面板 */
-.cs-dropdown {
+.pet-card-badge {
   position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  right: 0;
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-md);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.06);
-  padding: 6px;
-  opacity: 0;
-  transform: translateY(-8px) scale(0.96);
-  transform-origin: top center;
-  pointer-events: none;
-  transition: opacity 0.25s var(--ease-out), transform 0.25s var(--ease-spring);
-  z-index: 100;
-}
-
-.custom-select.open .cs-dropdown {
-  opacity: 1;
-  transform: translateY(0) scale(1);
-  pointer-events: auto;
-}
-
-.cs-option {
-  padding: 9px 14px;
-  font-size: 14px;
-  font-weight: 500;
-  font-family: inherit;
-  color: var(--text);
+  top: 4px;
+  right: 4px;
+  font-size: 9px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--accent);
+  padding: 1px 5px;
   border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: background 0.15s var(--ease-smooth), color 0.15s var(--ease-smooth);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.cs-option:hover {
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-
-.cs-option.selected {
-  background: var(--accent-soft);
-  color: var(--accent);
-  font-weight: 600;
-}
-
-.cs-option .cs-check {
-  margin-left: auto;
-  opacity: 0;
-  font-size: 13px;
-  transition: opacity 0.2s var(--ease-smooth);
-}
-
-.cs-option.selected .cs-check {
-  opacity: 1;
 }
 
 /* ── 文本输入 ──────────────────────────────────────── */

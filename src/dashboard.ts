@@ -61,6 +61,8 @@ function updateSliderProgress(input: HTMLInputElement): void {
 
 let previewAnimator: SpriteAnimator | null = null;
 let debounceTimer: number | null = null;
+// 当前选中的宠物名（网格切换时更新）
+let currentPet = "zbuddy";
 
 async function setupSettings(): Promise<void> {
   const settings = await invoke<Settings>("get_settings");
@@ -68,48 +70,34 @@ async function setupSettings(): Promise<void> {
 
   const scaleEl = document.getElementById("scale") as HTMLInputElement;
   const opacityEl = document.getElementById("opacity") as HTMLInputElement;
-  const petSelect = document.getElementById("pet-select") as HTMLSelectElement;
-  const csWrap = document.getElementById("pet-select-wrap")!;
-  const csTrigger = csWrap.querySelector(".cs-trigger") as HTMLButtonElement;
-  const csValue = csWrap.querySelector(".cs-value") as HTMLElement;
-  const csDropdown = csWrap.querySelector(".cs-dropdown") as HTMLElement;
+  const petGrid = document.getElementById("pet-grid")!;
   const topEl = document.getElementById("always-on-top") as HTMLInputElement;
   const petVisibleEl = document.getElementById("pet-visible") as HTMLInputElement;
 
-  // 构建自定义下拉选项
-  csDropdown.innerHTML = pets.map((name) =>
-    `<div class="cs-option ${name === settings.pet ? "selected" : ""}" data-value="${name}">
-      <span>${name}</span>
-      <span class="cs-check">✓</span>
-    </div>`
-  ).join("");
-  csValue.textContent = settings.pet;
-  petSelect.value = settings.pet;
+  // 当前选中宠物（空则回退 zbuddy）
+  let selectedPet = settings.pet || "zbuddy";
+  if (!pets.includes(selectedPet)) selectedPet = pets[0] || "zbuddy";
+  currentPet = selectedPet;
 
-  // 点击触发器切换下拉
-  csTrigger.addEventListener("click", (e) => {
-    e.stopPropagation();
-    csWrap.classList.toggle("open");
-  });
+  // 构建宠物图片网格（当前选中排第一）
+  await renderPetGrid(petGrid, pets, selectedPet);
 
-  // 点击选项
-  csDropdown.addEventListener("click", (e) => {
-    const opt = (e.target as HTMLElement).closest(".cs-option") as HTMLElement;
-    if (!opt) return;
-    const value = opt.dataset.value!;
-    csValue.textContent = value;
-    petSelect.value = value;
-    csDropdown.querySelectorAll(".cs-option").forEach((o) => o.classList.remove("selected"));
-    opt.classList.add("selected");
-    csWrap.classList.remove("open");
-    void save();
+  // 点击网格项切换宠物
+  petGrid.addEventListener("click", async (e) => {
+    const item = (e.target as HTMLElement).closest<HTMLElement>("[data-pet]");
+    if (!item) return;
+    const value = item.dataset.pet!;
+    if (value === selectedPet) return;
+    selectedPet = value;
+    currentPet = value;
+    // 重渲染网格（选中项排第一）
+    await renderPetGrid(petGrid, pets, selectedPet);
+    // 保存并更新预览
     previewAnimator?.destroy();
     previewAnimator = null;
-    initPreview(value, parseFloat(scaleEl.value));
+    await initPreview(value, parseFloat(scaleEl.value));
+    await save();
   });
-
-  // 点击外部关闭下拉
-  document.addEventListener("click", () => csWrap.classList.remove("open"));
 
   scaleEl.value = String(settings.scale);
   opacityEl.value = String(settings.opacity);
@@ -119,7 +107,7 @@ async function setupSettings(): Promise<void> {
   updateLabels();
   updateSliderProgress(scaleEl);
   updateSliderProgress(opacityEl);
-  initPreview(settings.pet, settings.scale);
+  initPreview(selectedPet, settings.scale);
 
   // 滑块实时更新
   scaleEl.addEventListener("input", () => {
@@ -157,14 +145,13 @@ function debouncedSave(): void {
 async function save(): Promise<void> {
   const scaleEl = document.getElementById("scale") as HTMLInputElement;
   const opacityEl = document.getElementById("opacity") as HTMLInputElement;
-  const petSelect = document.getElementById("pet-select") as HTMLSelectElement;
   const topEl = document.getElementById("always-on-top") as HTMLInputElement;
 
   // pet_hidden 不在此处保存（由 set_pet_visible 命令管理，避免覆盖）
   const newSettings: Omit<Settings, "pet_hidden"> = {
     scale: parseFloat(scaleEl.value),
     opacity: parseFloat(opacityEl.value),
-    pet: petSelect.value,
+    pet: currentPet,
     always_on_top: topEl.checked,
   };
 
@@ -174,6 +161,51 @@ async function save(): Promise<void> {
     console.error("save settings failed:", e);
   }
 }
+
+// ── 宠物图片网格 ────────────────────────────────────────
+
+/** 渲染宠物图片网格：当前选中排第一，选中项有激活样式 */
+async function renderPetGrid(
+  container: HTMLElement,
+  pets: string[],
+  selectedPet: string,
+): Promise<void> {
+  // 选中项排第一，其余保持原序
+  const ordered = [selectedPet, ...pets.filter((p) => p !== selectedPet)];
+
+  container.innerHTML = "";
+  for (const name of ordered) {
+    const isSelected = name === selectedPet;
+    const card = document.createElement("div");
+    card.className = `pet-card${isSelected ? " selected" : ""}`;
+    card.dataset.pet = name;
+    card.innerHTML = `
+      <canvas class="pet-card-canvas"></canvas>
+      <span class="pet-card-name">${name}</span>
+      ${isSelected ? '<span class="pet-card-badge">当前</span>' : ""}
+    `;
+    container.appendChild(card);
+
+    // 渲染该宠物的 idle 第一帧缩略图
+    try {
+      const { sheet_path } = await invoke<{ sheet_path: string }>("get_pet_sheet", { petName: name });
+      const manifestUrl = convertFileSrc(sheet_path.replace(/spritesheet\.\w+$/, "pet.json"));
+      const res = await fetch(manifestUrl);
+      const raw = await res.json() as Record<string, unknown>;
+      const sheetFileName = sheet_path.split("/").pop() || "spritesheet.webp";
+      const manifest: PetManifest = loadManifest(raw, sheetFileName);
+      const canvas = card.querySelector("canvas")!;
+      const anim = new SpriteAnimator(canvas, 0.35);
+      await anim.load(manifest, convertFileSrc(sheet_path));
+      anim.setState("idle");
+      // 缩略图保持 idle 动画，销毁时清理（卡片重渲染时自动替换）
+    } catch {
+      card.querySelector("canvas")?.replaceWith(Object.assign(document.createElement("span"), { textContent: "🐾" }));
+    }
+  }
+}
+
+/** 保存选中的宠物并应用到桌宠（复用 save，pet 已通过 currentPet 同步） */
 
 // ── 宠物预览 ────────────────────────────────────────────
 
