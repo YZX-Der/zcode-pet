@@ -415,26 +415,6 @@ input[type="range"]:active::-webkit-slider-thumb {
   box-shadow: 0 0 0 2px var(--accent-soft), var(--glass-shadow);
   background: var(--accent-soft);
 }
-/* 固定首位：当前选中宠物，跨整行强调 */
-.pet-card.pinned {
-  grid-column: 1 / -1;
-  flex-direction: row;
-  justify-content: center;
-  gap: 12px;
-  padding: 14px 16px;
-}
-.pet-card.pinned .pet-card-canvas {
-  width: 67px !important;
-  height: 73px !important;
-}
-.pet-card.pinned .pet-card-name {
-  font-size: 14px;
-}
-.pet-card.pinned .pet-card-badge {
-  position: static;
-  font-size: 10px;
-  padding: 2px 8px;
-}
 .pet-card-canvas {
   image-rendering: pixelated;
   image-rendering: crisp-edges;

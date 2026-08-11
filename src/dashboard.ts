@@ -167,7 +167,7 @@ async function save(): Promise<void> {
 
 // ── 宠物图片网格 ────────────────────────────────────────
 
-/** 渲染宠物图片网格：第一个固定展示当前选中，后面列出所有宠物 */
+/** 渲染宠物图片网格：列出所有宠物，选中项有激活样式 */
 async function renderPetGrid(
   container: HTMLElement,
   pets: string[],
@@ -175,14 +175,6 @@ async function renderPetGrid(
 ): Promise<void> {
   container.innerHTML = "";
 
-  // 固定首位：当前选中宠物（带「当前选中」标记，不可重复点击切换到自己）
-  if (selectedPet) {
-    const card = await createPetCard(selectedPet, true);
-    card.classList.add("pinned");
-    container.appendChild(card);
-  }
-
-  // 完整列表：所有宠物，选中项有激活样式
   for (const name of pets) {
     const isSelected = name === selectedPet;
     const card = await createPetCard(name, isSelected);
@@ -234,7 +226,7 @@ async function initPreview(petName: string, scale: number): Promise<void> {
     const manifest: PetManifest = loadManifest(raw, sheetFileName);
 
     const canvas = document.getElementById("preview-canvas") as HTMLCanvasElement;
-    previewAnimator = new SpriteAnimator(canvas, scale * 0.5);
+    previewAnimator = new SpriteAnimator(canvas, scale * 0.8);
     await previewAnimator.load(manifest, convertFileSrc(sheet_path));
   } catch (e) {
     console.error("preview init failed:", e);
@@ -243,8 +235,8 @@ async function initPreview(petName: string, scale: number): Promise<void> {
 
 function updatePreviewSize(scale: number): void {
   const canvas = document.getElementById("preview-canvas") as HTMLCanvasElement;
-  canvas.style.width = `${192 * scale * 0.5}px`;
-  canvas.style.height = `${208 * scale * 0.5}px`;
+  canvas.style.width = `${192 * scale * 0.8}px`;
+  canvas.style.height = `${208 * scale * 0.8}px`;
 }
 
 // ── 会话列表 ────────────────────────────────────────────
