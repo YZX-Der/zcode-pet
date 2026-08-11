@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "zcode-pet",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "identifier": "com.yzx.zcode-pet",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -17,14 +17,21 @@
       "assetProtocol": {
         "enable": true,
         "scope": {
-          "allow": ["$HOME/.zcode-pet/**", "$HOME/.codex/**", "/**"]
+          "allow": [
+            "$HOME/.zcode-pet/**",
+            "$HOME/.codex/**",
+            "/**"
+          ]
         }
       }
     }
   },
   "bundle": {
     "active": true,
-    "targets": "app",
+    "targets": [
+      "app",
+      "dmg"
+    ],
     "category": "Entertainment",
     "shortDescription": "Desktop pet for ZCode",
     "icon": [

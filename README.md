@@ -1,32 +1,36 @@
 # zcode-pet
 
-> ZCode 的桌面宠物 —— 一只住在你屏幕上、实时反映 AI 编程任务状态的像素小伙伴。
+> ZCode 的桌面宠物 -- 一只住在你屏幕上、实时反映 AI 编程任务状态的像素小伙伴。
 
-对标 OpenAI Codex 桌面端的 Pets 功能，为 ZCode 打造的**独立** macOS 桌宠应用：透明悬浮窗像素动画 + 通过 ZCode hooks 实现的任务状态联动。
-
-## 特性
-
-- 🐣 **像素风桌宠**：透明悬浮窗，始终置顶，可拖拽
-- 🔄 **状态联动**：通过 ZCode hooks 实时反映任务状态 —— Running / Needs input / Ready / Blocked / Sleep
-- 👆 **点击跳回**：点击宠物激活 ZCode / 终端窗口
-- 🐾 **多会话多宠物**：每个 ZCode 会话对应一只宠物，并行任务一目了然
-- 🎨 **兼容 Codex 宠物格式**：可直接加载 [awesome-codex-pet](https://github.com/legeling/awesome-codex-pet) / [Petdex](https://github.com/crafter-station/petdex) 社区宠物精灵表
-- 🛠️ **代码手绘内置宠物**：自带 5 只程序化生成的像素宠物
+为 ZCode 打造的 macOS 桌宠应用：透明悬浮窗像素动画 + 通过 ZCode hooks 实现的任务状态联动 + Dashboard 控制面板。单一桌宠始终跟随当前活跃会话，任务执行时奔跑、等待输入时提醒、完成后待命、长时间无活动变淡但不消失。
 
 ## 截图
 
-> 📸 截图占位（首次 release 附带）
+![zcode-pet 设置面板](docs/screenshots/settings-thumb.png)
+
+## 特性
+
+- 🐾 **单一桌宠**：一只宠物始终跟随当前 ZCode 会话，切换会话时无缝切换状态（不重建窗口）
+- 🔄 **状态联动**：通过 ZCode hooks 实时反映任务状态 -- Running / Needs input / Ready / Blocked / Idle / Sleep
+- 💤 **智能衰减**：长时间无活动桌宠变淡（35% 透明度）但不消失；非当前会话自动回收
+- ⚙️ **Dashboard 控制面板**：macOS 26 液态玻璃风格，设置页 + 会话列表 + 使用说明
+- 🎨 **宠物图片网格**：可视化选择宠物，实时预览大小/透明度效果
+- 📋 **会话列表**：显示活跃会话的任务名、状态，当前会话高亮标记
+- 👆 **点击跳回**：点击宠物激活 ZCode 窗口
+- 🖼️ **兼容 Codex 宠物格式**：可直接加载 [awesome-codex-pet](https://github.com/legeling/awesome-codex-pet) / [Petdex](https://github.com/crafter-station/petdex) 社区宠物精灵表
+- 🛠️ **代码手绘内置宠物**：自带 5 只程序化生成的像素宠物
 
 ## 快速开始
 
-### 环境要求
+### 方式一：下载发行包（推荐）
 
-- macOS 13+（Apple Silicon / Intel）
-- [Node.js 22+](https://nodejs.org/)（推荐用 [nvm](https://github.com/nvm-sh/nvm) 管理）
-- [Rust](https://rustup.rs/)（stable 工具链）
-- ZCode CLI（已安装并配置好 `~/.zcode/cli/config.json`）
+1. 从 [Releases](https://github.com/YZX-Der/zcode-pet/releases) 下载 `zcode-pet_0.2.0_aarch64.dmg`
+2. 打开 dmg，将 zcode-pet 拖到「应用程序」文件夹
+3. 首次打开：右键 -> 打开（绕过 Gatekeeper）
+4. 运行 `bash scripts/install.sh` 安装 hooks 联动
+5. 运行 `python3 tools/petgen.py build --out ~/.zcode-pet/pets` 生成内置宠物
 
-### 方式一：从源码构建（当前推荐）
+### 方式二：从源码构建
 
 ```bash
 git clone https://github.com/YZX-Der/zcode-pet.git
@@ -35,13 +39,13 @@ cd zcode-pet
 # 安装依赖
 npm install
 
-# 构建 release 版本（自动编译前端 + Rust）
+# 构建 release 版本（自动编译前端 + Rust + 打包 .app/.dmg）
 npx tauri build
 ```
 
-构建产物在 `src-tauri/target/release/bundle/macos/zcode-pet.app`。
+构建产物在 `src-tauri/target/release/bundle/macos/`。
 
-### 方式二：安装 hooks 联动
+### 安装 Hooks 联动
 
 ```bash
 # 部署 hook 脚本并自动合并写入 ZCode 配置
@@ -61,41 +65,49 @@ python3 tools/petgen.py build --out ~/.zcode-pet/pets
 
 这会在 `~/.zcode-pet/pets/` 下生成 5 只宠物（zbuddy、shiba、ducky、slime、rocky），每只包含 `pet.json` + `spritesheet.webp`（1536×1872）。
 
-### 启动
-
-```bash
-# 开发模式
-npx tauri dev
-
-# 或直接运行构建好的 app
-open src-tauri/target/release/bundle/macos/zcode-pet.app
-```
-
-启动后：
-- 打开任意 ZCode 会话开始对话，宠物会自动出现并随任务状态变化
-- 系统托盘菜单可切换宠物、唤醒/收起全部、退出
-- 点击宠物跳回 ZCode 窗口，拖拽移动宠物位置
-
-## 状态联动原理
+## 状态联动
 
 ```
 ZCode 7 个 hooks 事件
-  → ~/.zcode-pet/bin/zcode-hook（<10ms 原子写入状态文件）
-  → ~/.zcode-pet/state/<session_id>.json
-  → Tauri 应用（notify 文件监听）
-  → 对应会话的宠物窗口更新动画状态
+  -> ~/.zcode-pet/bin/zcode-hook（<10ms 原子写入状态文件）
+  -> ~/.zcode-pet/state/<session_id>.json
+  -> Tauri 应用（notify 文件监听）
+  -> 桌宠窗口更新动画状态（单一桌宠跟随当前会话）
 ```
 
 | ZCode 事件 | 宠物状态 | 动画 |
 |-----------|---------|------|
 | SessionStart | idle | 静息呼吸 |
 | UserPromptSubmit / PreToolUse / PostToolUse | running | 工作中 |
-| PermissionRequest | needs_input | 等待确认（感叹号） |
-| Stop | ready | 任务完成（对勾） |
-| PostToolUseFailure | blocked | 出错（红叉） |
-| —（300s 无 ready 后） | idle→sleep | 打瞌睡（z） |
+| PermissionRequest | needs_input | 等待确认 |
+| Stop | ready | 任务完成 |
+| PostToolUseFailure | blocked | 出错 |
+| -（600s 无活动） | sleep | 睡觉（透明度降至 35%） |
+
+### 衰减与回收
+
+| 规则 | 阈值 | 效果 |
+|------|------|------|
+| R1 ready 衰减 | ready 持续 300s | ready -> idle |
+| R2 睡眠 | 任意状态 600s | -> sleep（变淡显示） |
+| R3 回收 | 1800s 无活动 | 删状态文件（当前会话豁免，不消失） |
 
 详见 [状态协议规范](docs/03-state-protocol.md)。
+
+## Dashboard 控制面板
+
+### 设置页
+
+- **显示桌宠** / **始终置顶**：全局开关
+- **宠物大小** / **不透明度**：滑块实时预览
+- **选择宠物**：图片网格展示所有宠物，点击切换
+
+### 会话页
+
+- 显示活跃会话列表（idle/running/needs_input/ready/blocked 五种状态）
+- 当前会话带「当前」徽章并排第一
+- 每条会话显示任务名（从 ZCode 会话索引读取）+ 状态标签
+- 长时间无活动的会话自动清理
 
 ## 自定义宠物
 
@@ -105,8 +117,6 @@ ZCode 7 个 hooks 事件
 # 编辑 tools/petgen.py 中的 PetDef，定义自己的像素造型
 python3 tools/petgen.py build --pet my-pet --out ~/.zcode-pet/pets
 ```
-
-宠物定义使用 Grid 绘图基元（`rect`/`box`/`hline`/`vline`/`ellipse`），自动保证网格宽度一致。
 
 ### 方法二：加载 Codex 社区宠物
 
@@ -120,15 +130,16 @@ cp -r downloaded-pet ~/.codex/pets/my-pet/
 cp -r downloaded-pet ~/.zcode-pet/pets/my-pet/
 ```
 
-zcode-pet 自动识别 Codex 格式的 `pet.json`（只需 `id`/`displayName`/`description`/`spritesheetPath`），无需额外配置。详见 [Codex 兼容文档](docs/05-codex-compat.md)。
+详见 [Codex 格式兼容](docs/05-codex-compat.md)。
 
 ## 托盘菜单
 
 | 菜单项 | 功能 |
 |-------|------|
-| 切换宠物 → | 选择当前宠物（列表来自三个宠物目录） |
-| 唤醒全部 | 显示所有宠物窗口 |
-| 收起全部 | 隐藏所有宠物窗口 |
+| 显示主窗口 | 打开 Dashboard 控制面板 |
+| 切换宠物 -> | 选择当前宠物 |
+| 唤醒全部 | 显示桌宠窗口 |
+| 收起全部 | 隐藏桌宠窗口 |
 | 退出 | 退出应用 |
 
 ## 开发
@@ -137,36 +148,35 @@ zcode-pet 自动识别 Codex 格式的 `pet.json`（只需 `id`/`displayName`/`d
 
 ```
 zcode-pet/
-├── docs/              # 设计文档（PRD、架构、协议、计划、兼容）
-├── tools/
-│   ├── petgen.py      # 像素宠物生成器
-│   └── test_petgen.py # 生成器测试
+├── docs/                 # 设计文档 + 截图
+├── tools/petgen.py       # 像素宠物生成器
 ├── scripts/
-│   ├── zcode-hook     # hooks 状态写入脚本（POSIX sh）
-│   ├── install.sh     # 一键部署 hooks
-│   └── test_hook.sh   # hooks 测试
-├── src/               # 前端 TypeScript
-│   ├── main.ts        # 入口：加载宠物、状态监听、交互
-│   ├── animator.ts    # Canvas 精灵表动画引擎
-│   ├── compat.ts      # Codex 格式适配层
-│   └── protocol.ts    # 状态协议与宠物清单类型
-├── src-tauri/         # Rust 后端（Tauri 2）
-│   └── src/
-│       ├── lib.rs     # 应用入口、托盘菜单、AppState
-│       ├── window.rs  # 透明窗口管理、衰减规则
-│       ├── watcher.rs # notify 文件监听、衰减定时器
-│       ├── pet.rs     # 宠物路径解析、状态文件读写
-│       └── activate.rs# 点击激活（osascript）
-└── index.html         # 前端入口 HTML
+│   ├── zcode-hook        # hooks 状态写入脚本（POSIX sh）
+│   └── install.sh        # 一键部署 hooks
+├── src/                  # 前端 TypeScript
+│   ├── dashboard.ts      # Dashboard 控制面板逻辑
+│   ├── pet-window.ts     # 宠物浮窗逻辑
+│   ├── animator.ts       # Canvas 精灵表动画引擎
+│   ├── compat.ts         # Codex 格式适配层
+│   └── protocol.ts       # 状态协议类型
+├── src-tauri/src/        # Rust 后端（Tauri 2）
+│   ├── lib.rs            # 应用入口、托盘菜单
+│   ├── window.rs         # 桌宠窗口管理、衰减规则
+│   ├── watcher.rs        # notify 文件监听、衰减定时器
+│   ├── dashboard.rs      # 会话列表、桌宠开关命令
+│   ├── settings.rs       # 用户设置持久化
+│   ├── pet.rs            # 宠物路径解析、当前会话识别
+│   └── activate.rs       # 点击激活 ZCode
+└── index.html / pet.html # 前端入口
 ```
 
 ### 运行测试
 
 ```bash
-# Rust 单元测试（状态衰减规则）
+# Rust 单元测试
 cd src-tauri && cargo test
 
-# 前端测试（Codex 兼容层）
+# 前端测试
 npx vitest run
 
 # 像素宠物生成器测试
@@ -181,9 +191,6 @@ bash scripts/test_hook.sh
 ```bash
 # 前端热更新 + Rust 即时重编译
 npx tauri dev
-
-# 预览宠物造型（生成 PNG 预览图）
-python3 tools/petgen.py preview --pet zbuddy --out /tmp/preview
 ```
 
 ## 文档
@@ -198,9 +205,10 @@ python3 tools/petgen.py preview --pet zbuddy --out /tmp/preview
 
 - **桌面框架**：[Tauri 2](https://v2.tauri.app/)（Rust + WebView）
 - **前端**：Vite + TypeScript（vanilla，无框架）
+- **UI 风格**：macOS 26 液态玻璃（backdrop-filter + 自定义组件）
 - **像素生成**：Python + Pillow
 - **文件监听**：[notify](https://docs.rs/notify) + notify-debouncer-full
-- **状态协议**：JSON 文件（原子写入，<10ms）
+- **会话索引**：rusqlite（只读 ZCode tasks-index.sqlite）
 
 ## FAQ
 
