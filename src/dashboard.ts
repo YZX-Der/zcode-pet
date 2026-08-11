@@ -22,6 +22,7 @@ interface SessionInfo {
   project: string | null;
   title: string;
   pet_enabled: boolean;
+  is_current: boolean;
   ts: number;
 }
 
@@ -237,11 +238,13 @@ async function refreshSessions(): Promise<void> {
       const project = s.project || "";
       const title = s.title || shortId;
       const petCls = s.pet_enabled ? "on" : "off";
+      const currentCls = s.is_current ? " is-current" : "";
+      const currentBadge = s.is_current ? '<span class="session-current-badge">当前</span>' : "";
       return `
-        <div class="session-card" style="animation-delay:${i * 0.06}s">
+        <div class="session-card${currentCls}" style="animation-delay:${i * 0.06}s">
           <div class="session-state-dot" style="background:${color};box-shadow:0 0 8px ${color}"></div>
           <div class="session-info">
-            <div class="session-title" title="${escapeHtml(title)}">${escapeHtml(title)}</div>
+            <div class="session-title" title="${escapeHtml(title)}">${escapeHtml(title)}${currentBadge}</div>
             <div class="session-meta">${escapeHtml(shortId)}${project ? ` · ${escapeHtml(project)}` : ""}</div>
           </div>
           <div class="session-actions">

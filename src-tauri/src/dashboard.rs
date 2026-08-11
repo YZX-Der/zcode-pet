@@ -6,6 +6,7 @@ use crate::window::{compute_effective_state, is_active_state};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::time::SystemTime;
 use tauri::AppHandle;
 
 #[derive(Serialize)]
@@ -18,6 +19,8 @@ pub struct SessionInfo {
     pub title: String,
     /// 该会话的桌宠是否开启
     pub pet_enabled: bool,
+    /// 是否为 ZCode 当前活跃会话（最近有模型 IO 的会话）
+    pub is_current: bool,
     pub ts: i64,
 }
 
@@ -29,6 +32,46 @@ pub struct PetSheetInfo {
 /// ZCode 会话索引数据库路径（任务标题来源）。
 fn tasks_index_db() -> PathBuf {
     pet::home().join(".zcode").join("v2").join("tasks-index.sqlite")
+}
+
+/// ZCode rollout 目录（模型 IO 日志，文件修改时间反映会话活跃度）。
+fn rollout_dir() -> PathBuf {
+    pet::home().join(".zcode").join("cli").join("rollout")
+}
+
+/// 识别 ZCode 当前活跃会话：rollout 目录下最近修改的 sess_* 文件对应的 session_id。
+/// subagent 文件不算用户会话，排除。目录不可用时返回 None。
+fn fetch_current_session_id() -> Option<String> {
+    let dir = rollout_dir();
+    let mut latest: Option<(SystemTime, String)> = None;
+    let entries = std::fs::read_dir(&dir).ok()?;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let name = match path.file_name().and_then(|n| n.to_str()) {
+            Some(n) => n,
+            None => continue,
+        };
+        // model-io-sess_<id>.jsonl -> sess_<id>
+        let session_id = match name
+            .strip_prefix("model-io-")
+            .and_then(|s| s.strip_suffix(".jsonl"))
+        {
+            Some(s) if s.starts_with("sess_") => s.to_string(),
+            _ => continue,
+        };
+        // 排除 subagent（非用户会话）
+        if session_id.contains("subagent") {
+            continue;
+        }
+        let mtime = match entry.metadata().and_then(|m| m.modified()) {
+            Ok(t) => t,
+            Err(_) => continue,
+        };
+        if latest.as_ref().map_or(true, |(t, _)| mtime > *t) {
+            latest = Some((mtime, session_id));
+        }
+    }
+    latest.map(|(_, id)| id)
 }
 
 /// 批量查询任务标题：session_id → title。
@@ -63,11 +106,15 @@ fn fetch_task_titles(session_ids: &[String]) -> HashMap<String, String> {
     titles
 }
 
-/// 列出所有执行中的会话及其状态（供 Dashboard 会话页展示）。
+/// 列出会话及其状态（供 Dashboard 会话页展示）。
+///
+/// 展示范围：执行中的会话（running/needs_input/blocked）∪ ZCode 当前活跃会话
+/// （即使当前会话处于 idle/ready 也始终显示，让用户能管理正在用的会话）。
 #[tauri::command]
 pub fn list_sessions() -> Vec<SessionInfo> {
     let state_dir = pet::state_dir();
     let now = chrono::Utc::now().timestamp();
+    let current_sid = fetch_current_session_id();
     let mut sessions = Vec::new();
 
     if let Ok(entries) = std::fs::read_dir(&state_dir) {
@@ -76,24 +123,24 @@ pub fn list_sessions() -> Vec<SessionInfo> {
             if path.extension().map_or(true, |e| e != "json") {
                 continue;
             }
-            if let Ok(content) = std::fs::read_to_string(&path) {
-                if let Ok(sf) = serde_json::from_str::<pet::StateFile>(&content) {
-                    let effective = compute_effective_state(&sf.state, sf.ts, now);
-                    // 仅展示执行中的会话（活跃 = 有任务在执行）
-                    if !is_active_state(&effective) {
-                        continue;
-                    }
-                    sessions.push(SessionInfo {
-                        effective_state: effective,
-                        session_id: sf.session_id.clone(),
-                        state: sf.state,
-                        project: sf.project,
-                        title: String::new(),
-                        pet_enabled: true,
-                        ts: sf.ts,
-                    });
-                }
+            let Ok(content) = std::fs::read_to_string(&path) else { continue };
+            let Ok(sf) = serde_json::from_str::<pet::StateFile>(&content) else { continue };
+            let effective = compute_effective_state(&sf.state, sf.ts, now);
+            let is_current = current_sid.as_deref() == Some(&sf.session_id);
+            // 执行中的会话 或 当前活跃会话 才展示
+            if !is_active_state(&effective) && !is_current {
+                continue;
             }
+            sessions.push(SessionInfo {
+                effective_state: effective,
+                session_id: sf.session_id.clone(),
+                state: sf.state,
+                project: sf.project,
+                title: String::new(),
+                pet_enabled: true,
+                is_current,
+                ts: sf.ts,
+            });
         }
     }
 
@@ -115,6 +162,9 @@ pub fn list_sessions() -> Vec<SessionInfo> {
     for s in &mut sessions {
         s.pet_enabled = !disabled.iter().any(|d| d == &s.session_id);
     }
+
+    // 当前会话排第一
+    sessions.sort_by(|a, b| b.is_current.cmp(&a.is_current));
 
     sessions
 }
