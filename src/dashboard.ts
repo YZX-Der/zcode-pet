@@ -119,6 +119,9 @@ async function setupSettings(): Promise<void> {
   opacityEl.addEventListener("input", () => {
     updateLabels();
     updateSliderProgress(opacityEl);
+    // 实时预览不透明度
+    const previewCanvas = document.getElementById("preview-canvas") as HTMLCanvasElement;
+    previewCanvas.style.opacity = opacityEl.value;
     debouncedSave();
   });
 
@@ -164,45 +167,57 @@ async function save(): Promise<void> {
 
 // ── 宠物图片网格 ────────────────────────────────────────
 
-/** 渲染宠物图片网格：当前选中排第一，选中项有激活样式 */
+/** 渲染宠物图片网格：第一个固定展示当前选中，后面列出所有宠物 */
 async function renderPetGrid(
   container: HTMLElement,
   pets: string[],
   selectedPet: string,
 ): Promise<void> {
-  // 选中项排第一，其余保持原序
-  const ordered = [selectedPet, ...pets.filter((p) => p !== selectedPet)];
-
   container.innerHTML = "";
-  for (const name of ordered) {
-    const isSelected = name === selectedPet;
-    const card = document.createElement("div");
-    card.className = `pet-card${isSelected ? " selected" : ""}`;
-    card.dataset.pet = name;
-    card.innerHTML = `
-      <canvas class="pet-card-canvas"></canvas>
-      <span class="pet-card-name">${name}</span>
-      ${isSelected ? '<span class="pet-card-badge">当前</span>' : ""}
-    `;
-    container.appendChild(card);
 
-    // 渲染该宠物的 idle 第一帧缩略图
-    try {
-      const { sheet_path } = await invoke<{ sheet_path: string }>("get_pet_sheet", { petName: name });
-      const manifestUrl = convertFileSrc(sheet_path.replace(/spritesheet\.\w+$/, "pet.json"));
-      const res = await fetch(manifestUrl);
-      const raw = await res.json() as Record<string, unknown>;
-      const sheetFileName = sheet_path.split("/").pop() || "spritesheet.webp";
-      const manifest: PetManifest = loadManifest(raw, sheetFileName);
-      const canvas = card.querySelector("canvas")!;
-      const anim = new SpriteAnimator(canvas, 0.35);
-      await anim.load(manifest, convertFileSrc(sheet_path));
-      anim.setState("idle");
-      // 缩略图保持 idle 动画，销毁时清理（卡片重渲染时自动替换）
-    } catch {
-      card.querySelector("canvas")?.replaceWith(Object.assign(document.createElement("span"), { textContent: "🐾" }));
-    }
+  // 固定首位：当前选中宠物（带「当前选中」标记，不可重复点击切换到自己）
+  if (selectedPet) {
+    const card = await createPetCard(selectedPet, true);
+    card.classList.add("pinned");
+    container.appendChild(card);
   }
+
+  // 完整列表：所有宠物，选中项有激活样式
+  for (const name of pets) {
+    const isSelected = name === selectedPet;
+    const card = await createPetCard(name, isSelected);
+    container.appendChild(card);
+  }
+}
+
+/** 创建单个宠物卡片 */
+async function createPetCard(name: string, isSelected: boolean): Promise<HTMLElement> {
+  const card = document.createElement("div");
+  card.className = `pet-card${isSelected ? " selected" : ""}`;
+  card.dataset.pet = name;
+  card.innerHTML = `
+    <canvas class="pet-card-canvas"></canvas>
+    <span class="pet-card-name">${name}</span>
+    ${isSelected ? '<span class="pet-card-badge">当前</span>' : ""}
+  `;
+
+  // 渲染该宠物的 idle 动画缩略图
+  try {
+    const { sheet_path } = await invoke<{ sheet_path: string }>("get_pet_sheet", { petName: name });
+    const manifestUrl = convertFileSrc(sheet_path.replace(/spritesheet\.\w+$/, "pet.json"));
+    const res = await fetch(manifestUrl);
+    const raw = await res.json() as Record<string, unknown>;
+    const sheetFileName = sheet_path.split("/").pop() || "spritesheet.webp";
+    const manifest: PetManifest = loadManifest(raw, sheetFileName);
+    const canvas = card.querySelector("canvas")!;
+    const anim = new SpriteAnimator(canvas, 0.35);
+    await anim.load(manifest, convertFileSrc(sheet_path));
+    anim.setState("idle");
+  } catch {
+    card.querySelector("canvas")?.replaceWith(Object.assign(document.createElement("span"), { textContent: "🐾" }));
+  }
+
+  return card;
 }
 
 /** 保存选中的宠物并应用到桌宠（复用 save，pet 已通过 currentPet 同步） */
