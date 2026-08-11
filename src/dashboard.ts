@@ -321,7 +321,43 @@ async function main(): Promise<void> {
     }
   }, 5000);
 
+  setupInstallButton();
+
   await invoke("frontend_ready").catch(() => {});
+}
+
+// ── Hooks 一键安装 ────────────────────────────────────────
+
+async function setupInstallButton(): Promise<void> {
+  const btn = document.getElementById("install-hooks-btn") as HTMLButtonElement;
+  if (!btn) return;
+
+  // 检查当前安装状态
+  try {
+    const installed = await invoke<boolean>("is_hooks_installed");
+    if (installed) {
+      btn.textContent = "✓ 已安装";
+      btn.classList.add("installed");
+      btn.disabled = true;
+      return;
+    }
+  } catch {
+    // 忽略，显示安装按钮
+  }
+
+  btn.addEventListener("click", async () => {
+    btn.disabled = true;
+    btn.textContent = "安装中...";
+    try {
+      await invoke("install_hooks");
+      btn.textContent = "✓ 安装成功";
+      btn.classList.add("installed");
+    } catch (e) {
+      btn.textContent = "安装失败，请重试";
+      btn.disabled = false;
+      console.error("install hooks failed:", e);
+    }
+  });
 }
 
 main().catch((err) => console.error("dashboard error:", err));

@@ -6,6 +6,7 @@ extern crate objc;
 
 mod activate;
 mod dashboard;
+mod installer;
 mod pet;
 mod settings;
 mod watcher;
@@ -160,6 +161,11 @@ pub fn run() {
                 let _ = app.set_activation_policy(tauri::ActivationPolicy::Regular);
             }
 
+            // 初始化打包资源目录（内置宠物精灵表）
+            if let Ok(res_dir) = app.path().resource_dir() {
+                crate::pet::init_resource_dir(res_dir);
+            }
+
             // 手动创建主窗口
             use tauri::{WebviewUrl, WebviewWindowBuilder};
             let main_window = WebviewWindowBuilder::new(
@@ -207,6 +213,8 @@ pub fn run() {
             dashboard::list_sessions,
             dashboard::set_pet_visible,
             dashboard::get_pet_sheet,
+            installer::is_hooks_installed,
+            installer::install_hooks,
             cmd::frontend_ready
         ])
         .run(tauri::generate_context!())

@@ -752,6 +752,33 @@ input[type="range"]:active::-webkit-slider-thumb {
 }
 
 /* ── 说明页 ──────────────────────────────────────── */
+.install-btn {
+  margin-top: 12px;
+  padding: 9px 24px;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  color: #fff;
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.25s var(--ease-smooth);
+}
+.install-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px var(--accent-soft);
+}
+.install-btn:disabled { cursor: default; opacity: 0.9; }
+.install-btn.installed {
+  background: #34c759;
+  opacity: 1;
+}
+.help-content pre .cmt {
+  color: var(--text-tertiary);
+  font-style: italic;
+}
+
 .help-content {
   width: 100%;
   display: flex;

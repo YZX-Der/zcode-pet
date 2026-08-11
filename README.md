@@ -29,8 +29,8 @@
 1. 从 [Releases](https://github.com/YZX-Der/zcode-pet/releases) 下载 `zcode-pet_0.2.0_aarch64.dmg`
 2. 打开 dmg，将 zcode-pet 拖到「应用程序」文件夹
 3. 首次打开：右键 -> 打开（绕过 Gatekeeper）
-4. 运行 `bash scripts/install.sh` 安装 hooks 联动
-5. 运行 `python3 tools/petgen.py build --out ~/.zcode-pet/pets` 生成内置宠物
+4. 启动后打开「说明」页，点击「一键安装」启用 hooks 联动
+5. 内置 5 只宠物已随应用打包，无需额外生成
 
 ### 方式二：从源码构建
 
@@ -48,6 +48,10 @@ npx tauri build
 构建产物在 `src-tauri/target/release/bundle/macos/`。
 
 ### 安装 Hooks 联动
+
+**方式一（推荐）**：启动应用 -> 打开「说明」页 -> 点击「一键安装」按钮，自动部署 hook 脚本并合并 ZCode 配置（自动备份）。
+
+**方式二（终端）**：
 
 ```bash
 # 部署 hook 脚本并自动合并写入 ZCode 配置

@@ -1,7 +1,17 @@
 //! 宠物路径解析与状态文件读写。
 
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 use std::time::SystemTime;
+
+/// 打包后资源目录（.app/Contents/Resources），setup 时初始化。
+/// 开发期为 None，回退到 CARGO_MANIFEST_DIR。
+static RESOURCE_DIR: OnceLock<Option<PathBuf>> = OnceLock::new();
+
+/// 初始化资源目录（应用启动时调用一次）。
+pub fn init_resource_dir(dir: PathBuf) {
+    let _ = RESOURCE_DIR.set(Some(dir));
+}
 
 /// 状态文件反序列化结构 —— 对应 docs/03-state-protocol.md
 #[derive(Clone, serde::Deserialize)]
@@ -29,8 +39,18 @@ pub fn user_pets_dir() -> PathBuf {
     home().join(".zcode-pet").join("pets")
 }
 
-/// 内置宠物目录（开发期从项目 assets 加载，否则回退到用户目录）。
+/// 内置宠物目录（打包后从 .app/Contents/Resources 加载，
+/// 开发期从项目 assets 加载，否则回退到用户目录）。
 pub fn builtin_pets_dir() -> PathBuf {
+    // 打包后：resource_dir/_up_/assets/pets（Tauri 对 ../ 路径加 _up_ 前缀）
+    if let Some(Some(res)) = RESOURCE_DIR.get() {
+        for candidate in [res.join("_up_").join("assets").join("pets"), res.join("assets").join("pets")] {
+            if candidate.exists() {
+                return candidate;
+            }
+        }
+    }
+    // 开发期：CARGO_MANIFEST_DIR/../../assets/pets
     let dev = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("..")
         .join("..")

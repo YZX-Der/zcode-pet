@@ -126,16 +126,18 @@
               <div class="help-num">1</div>
               <div class="help-body">
                 <h3>安装 Hooks 联动</h3>
-                <p>让宠物能自动响应 ZCode 任务状态变化：</p>
-                <pre>bash scripts/install.sh</pre>
+                <p>让宠物能自动响应 ZCode 任务状态变化。点击下方按钮一键安装（自动备份现有配置）：</p>
+                <button id="install-hooks-btn" class="install-btn">一键安装</button>
               </div>
             </div>
             <div class="help-section glass-card">
               <div class="help-num">2</div>
               <div class="help-body">
-                <h3>生成内置宠物</h3>
-                <p>生成 5 只像素宠物到用户目录：</p>
-                <pre>python3 tools/petgen.py build --out ~/.zcode-pet/pets</pre>
+                <h3>加载社区宠物（可选）</h3>
+                <p>内置 5 只宠物已随应用打包。如需更多，从社区下载宠物包放入对应目录：</p>
+                <pre>cp -r downloaded-pet ~/.codex/pets/my-pet/   <span class="cmt"># 与 Codex 桌面端共享</span>
+cp -r downloaded-pet ~/.zcode-pet/pets/my-pet/ <span class="cmt"># zcode-pet 专属</span></pre>
+                <p class="field-hint">社区资源：<a href="https://github.com/legeling/awesome-codex-pet" target="_blank">awesome-codex-pet</a> · <a href="https://github.com/crafter-station/petdex" target="_blank">Petdex</a></p>
               </div>
             </div>
             <div class="help-section glass-card">
