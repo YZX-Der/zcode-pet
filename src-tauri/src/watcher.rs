@@ -32,8 +32,6 @@ fn handle_state_file(app: &AppHandle, path: &Path) {
     }
 
     window::ensure_window(app, &state.session_id, &state.state, true);
-    // 收到状态事件 = 用户正在操作该会话 = 当前会话：关闭其他桌宠（单一桌宠模式）
-    window::close_non_current_windows_except(app, &state.session_id);
 }
 
 /// 启动文件监听器（独立线程，debounce 200ms）。
@@ -102,14 +100,12 @@ fn apply_decay(app: &AppHandle) {
     let current_sid = pet::current_session_id();
     let mut dead_sessions = Vec::new();
 
-    // 单一桌宠模式：关闭非当前会话的桌宠窗口（兜底，处理切换后无新事件的情况）
-    if let Some(cur) = &current_sid {
-        window::close_non_current_windows_except(app, cur);
-    }
-
     {
         let app_state = app.state::<crate::AppState>();
         let mut sessions = app_state.sessions.lock().unwrap();
+
+        // 衰减后当前会话的有效状态（单一桌宠只更新这一个）
+        let mut current_effective: Option<String> = None;
 
         for (session_id, entry) in sessions.iter_mut() {
             let effective = window::effective_state(&entry.raw_state, entry.ts);
@@ -120,12 +116,18 @@ fn apply_decay(app: &AppHandle) {
                 continue;
             }
 
-            // 发送衰减后的状态
-            let label = pet::session_label(session_id);
-            if let Some(window) = app.get_webview_window(&label) {
+            // 只更新当前会话的桌宠状态
+            if current_sid.as_deref() == Some(session_id.as_str()) {
+                current_effective = Some(effective);
+            }
+        }
+
+        // 更新桌宠窗口状态（单一桌宠反映当前会话）
+        if let Some(state) = current_effective {
+            if let Some(window) = app.get_webview_window("pet") {
                 let _ = window.emit(
                     "pet://state",
-                    window::StatePayload { state: effective },
+                    window::StatePayload { state },
                 );
             }
         }
@@ -135,9 +137,8 @@ fn apply_decay(app: &AppHandle) {
         }
     }
 
-    // 清理死亡会话的窗口和状态文件
+    // 清理死亡会话的状态文件（单一桌宠模式下不需要关窗，桌宠只跟随当前会话）
     for sid in &dead_sessions {
-        window::close_window(app, sid);
         let file = pet::state_dir().join(format!("{sid}.json"));
         let _ = std::fs::remove_file(&file);
         log::info!("reaped dead session {sid}");

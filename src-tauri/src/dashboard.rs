@@ -2,7 +2,7 @@
 
 use crate::pet;
 use crate::settings;
-use crate::window::{compute_effective_state, is_active_state};
+use crate::window::compute_effective_state;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -16,8 +16,8 @@ pub struct SessionInfo {
     pub project: Option<String>,
     /// 任务名（ZCode tasks-index.sqlite 中的会话标题，fallback 项目名）
     pub title: String,
-    /// 该会话的桌宠是否开启
-    pub pet_enabled: bool,
+    /// 桌宠是否显示（全局开关）
+    pub pet_visible: bool,
     /// 是否为 ZCode 当前活跃会话（最近有模型 IO 的会话）
     pub is_current: bool,
     pub ts: i64,
@@ -67,13 +67,14 @@ fn fetch_task_titles(session_ids: &[String]) -> HashMap<String, String> {
 
 /// 列出会话及其状态（供 Dashboard 会话页展示）。
 ///
-/// 展示范围：执行中的会话（running/needs_input/blocked）∪ ZCode 当前活跃会话
-/// （即使当前会话处于 idle/ready 也始终显示，让用户能管理正在用的会话）。
+/// 展示范围：非 sleep 的会话（idle/running/needs_input/ready/blocked）∪ 当前活跃会话
+/// （当前会话即使 sleep 也显示，让用户能管理正在用的会话）。
 #[tauri::command]
 pub fn list_sessions() -> Vec<SessionInfo> {
     let state_dir = pet::state_dir();
     let now = chrono::Utc::now().timestamp();
     let current_sid = pet::current_session_id();
+    let pet_hidden = settings::load().pet_hidden;
     let mut sessions = Vec::new();
 
     if let Ok(entries) = std::fs::read_dir(&state_dir) {
@@ -86,8 +87,8 @@ pub fn list_sessions() -> Vec<SessionInfo> {
             let Ok(sf) = serde_json::from_str::<pet::StateFile>(&content) else { continue };
             let effective = compute_effective_state(&sf.state, sf.ts, now);
             let is_current = current_sid.as_deref() == Some(&sf.session_id);
-            // 执行中的会话 或 当前活跃会话 才展示
-            if !is_active_state(&effective) && !is_current {
+            // 非 sleep 的会话 或 当前活跃会话 才展示
+            if effective == "sleep" && !is_current {
                 continue;
             }
             sessions.push(SessionInfo {
@@ -96,7 +97,7 @@ pub fn list_sessions() -> Vec<SessionInfo> {
                 state: sf.state,
                 project: sf.project,
                 title: String::new(),
-                pet_enabled: true,
+                pet_visible: !pet_hidden,
                 is_current,
                 ts: sf.ts,
             });
@@ -116,46 +117,23 @@ pub fn list_sessions() -> Vec<SessionInfo> {
         }
     }
 
-    // 桌宠开关状态（按会话持久化在 config.json）
-    let disabled = settings::load().disabled_sessions;
-    for s in &mut sessions {
-        s.pet_enabled = !disabled.iter().any(|d| d == &s.session_id);
-    }
-
     // 当前会话排第一
     sessions.sort_by(|a, b| b.is_current.cmp(&a.is_current));
 
     sessions
 }
 
-/// 打开/关闭某条会话的桌宠（按会话持久化）。
+/// 桌宠全局开关（显示/隐藏）。
 #[tauri::command]
-pub fn set_pet_enabled(app: AppHandle, session_id: String, enabled: bool) -> Result<(), String> {
+pub fn set_pet_visible(app: AppHandle, visible: bool) -> Result<(), String> {
     let mut cfg = settings::load();
-    if enabled {
-        cfg.disabled_sessions.retain(|s| s != &session_id);
-    } else if !cfg.disabled_sessions.iter().any(|s| s == &session_id) {
-        cfg.disabled_sessions.push(session_id.clone());
-    }
+    cfg.pet_hidden = !visible;
     settings::save(&cfg)?;
-
-    if enabled {
-        // 重新打开：若该会话状态文件仍在则强制重建宠物窗口（不管当前状态）
-        let state_file = pet::state_dir().join(format!("{session_id}.json"));
-        if let Ok(content) = std::fs::read_to_string(&state_file) {
-            if let Ok(sf) = serde_json::from_str::<pet::StateFile>(&content) {
-                crate::window::ensure_window(&app, &sf.session_id, &sf.state, true);
-            }
-        }
-        // 单一桌宠模式：切换到该会话，关闭其他桌宠
-        crate::window::close_non_current_windows_except(&app, &session_id);
-    } else {
-        crate::window::close_window(&app, &session_id);
-    }
+    crate::window::set_pet_visible(&app, visible);
     Ok(())
 }
 
-/// 关闭一条会话：关窗 + 删状态文件 + 移出列表。
+/// 关闭一条会话：删状态文件 + 移出列表。
 /// 若该会话在 ZCode 中仍在执行，后续事件会重新出现。
 #[tauri::command]
 pub fn close_session(app: AppHandle, session_id: String) {

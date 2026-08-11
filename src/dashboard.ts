@@ -21,7 +21,7 @@ interface SessionInfo {
   effective_state: string;
   project: string | null;
   title: string;
-  pet_enabled: boolean;
+  pet_visible: boolean;
   is_current: boolean;
   ts: number;
 }
@@ -237,9 +237,13 @@ async function refreshSessions(): Promise<void> {
         : s.session_id;
       const project = s.project || "";
       const title = s.title || shortId;
-      const petCls = s.pet_enabled ? "on" : "off";
       const currentCls = s.is_current ? " is-current" : "";
       const currentBadge = s.is_current ? '<span class="session-current-badge">当前</span>' : "";
+      // 桌宠全局开关只在当前会话显示
+      const petToggle = s.is_current
+        ? `<button class="session-action pet-toggle ${s.pet_visible ? "on" : "off"}" data-action="toggle-pet" data-session="${s.session_id}"
+            title="${s.pet_visible ? "隐藏桌宠" : "显示桌宠"}">🐾</button>`
+        : "";
       return `
         <div class="session-card${currentCls}" style="animation-delay:${i * 0.06}s">
           <div class="session-state-dot" style="background:${color};box-shadow:0 0 8px ${color}"></div>
@@ -249,15 +253,14 @@ async function refreshSessions(): Promise<void> {
           </div>
           <div class="session-actions">
             <span class="session-state-tag" style="background:${color}1a;color:${color}">${label}</span>
-            <button class="session-action pet-toggle ${petCls}" data-action="toggle-pet" data-session="${s.session_id}"
-              title="${s.pet_enabled ? "关闭该会话的桌宠" : "打开该会话的桌宠"}">🐾</button>
+            ${petToggle}
             <button class="session-action session-close" data-action="close-session" data-session="${s.session_id}"
               title="关闭该会话（清理状态记录）">✕</button>
           </div>
         </div>`;
     }).join("");
 
-    // 事件委托：桌宠开关 / 关闭会话
+    // 事件委托：桌宠开关（全局） / 关闭会话
     container.onclick = async (e) => {
       const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-action]");
       if (!btn) return;
@@ -266,7 +269,9 @@ async function refreshSessions(): Promise<void> {
       btn.disabled = true;
       try {
         if (action === "toggle-pet") {
-          await invoke("set_pet_enabled", { sessionId, enabled: btn.classList.contains("off") });
+          // 全局开关：当前状态决定切换方向
+          const visible = btn.classList.contains("off");
+          await invoke("set_pet_visible", { visible });
         } else if (action === "close-session") {
           await invoke("close_session", { sessionId });
         }

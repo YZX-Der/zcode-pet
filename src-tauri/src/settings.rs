@@ -23,9 +23,9 @@ pub struct Settings {
     /// 点击激活的目标应用优先级列表
     #[serde(default = "default_activate_targets")]
     pub activate_targets: Vec<String>,
-    /// 已禁用桌宠的会话 ID 列表（按会话持久化的宠物开关）
+    /// 桌宠全局开关（false=显示，true=隐藏）
     #[serde(default)]
-    pub disabled_sessions: Vec<String>,
+    pub pet_hidden: bool,
 }
 
 fn default_scale() -> f64 {
@@ -56,7 +56,7 @@ impl Default for Settings {
             pet: default_pet(),
             always_on_top: default_true(),
             activate_targets: default_activate_targets(),
-            disabled_sessions: Vec::new(),
+            pet_hidden: false,
         }
     }
 }
@@ -97,7 +97,7 @@ pub fn get_settings() -> Settings {
 /// Tauri 命令：保存设置并应用
 #[tauri::command]
 pub fn save_settings(app: AppHandle, settings: Settings) -> Result<Settings, String> {
-    // 逐字段合并到现有配置：disabled_sessions 由后端管理（桌宠开关），
+    // 逐字段合并到现有配置：pet_hidden 由后端管理（桌宠开关），
     // 前端整体保存设置时不得覆盖它
     let mut merged = load();
     merged.scale = settings.scale;
@@ -109,7 +109,7 @@ pub fn save_settings(app: AppHandle, settings: Settings) -> Result<Settings, Str
     // 更新全局 pet_name
     let state = app.state::<crate::AppState>();
     *state.pet_name.lock().unwrap() = settings.pet.clone();
-    // 重建所有宠物窗口以应用新 scale/opacity/置顶等参数
+    // 重建桌宠窗口以应用新 scale/opacity/置顶等参数
     crate::window::recreate_all(&app);
     Ok(merged)
 }
