@@ -69,8 +69,14 @@ pub fn is_active_state(effective: &str) -> bool {
 
 /// 为一个会话创建宠物浮窗（若尚未存在）。
 ///
+/// 单一桌宠模式：只为当前活跃会话创建窗口，其他会话不显示桌宠。
 /// `force` 为 true 时跳过「仅执行中状态才创建」的检查，用于用户手动打开桌宠。
 pub fn ensure_window(app: &AppHandle, session_id: &str, state: &str, force: bool) {
+    // 单一桌宠模式：非当前活跃会话不创建/更新桌宠
+    if pet::current_session_id().as_deref() != Some(session_id) {
+        return;
+    }
+
     let label = pet::session_label(session_id);
 
     // 已存在 -> 只更新状态
@@ -163,6 +169,9 @@ pub fn ensure_window(app: &AppHandle, session_id: &str, state: &str, force: bool
         Ok(window) => {
             log::info!("created pet window '{label}' ({frame_w}x{frame_h})");
 
+            // 单一桌宠模式：创建新窗口后关闭其他非当前会话的桌宠
+            close_non_current_windows(app);
+
             // macOS: 提升窗口级别到全屏之上，并设置跨 Space 显示。
             //
             // 注意：ensure_window 可能被 watcher 线程（后台线程）调用，
@@ -225,6 +234,27 @@ pub fn close_session(app: &AppHandle, session_id: &str) {
         sessions.remove(session_id);
     }
     log::info!("closed session {session_id}");
+}
+
+/// 关闭所有非当前活跃会话的桌宠窗口（单一桌宠模式：只保留当前会话的桌宠）。
+/// 不删除状态文件、不移出 sessions map（会话仍在，只是不显示桌宠）。
+pub fn close_non_current_windows(app: &AppHandle) {
+    let current = pet::current_session_id();
+    let to_close: Vec<String> = {
+        let app_state = app.state::<crate::AppState>();
+        let sessions = app_state.sessions.lock().unwrap();
+        sessions
+            .keys()
+            .filter(|sid| current.as_deref() != Some(sid.as_str()))
+            .map(|sid| pet::session_label(sid))
+            .collect()
+    };
+    for label in to_close {
+        if let Some(window) = app.get_webview_window(&label) {
+            let _ = window.close();
+            log::info!("closed non-current pet window '{label}'");
+        }
+    }
 }
 
 /// 计算下一个窗口位置：从右下角向上堆叠。

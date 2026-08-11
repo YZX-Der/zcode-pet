@@ -100,6 +100,9 @@ fn apply_decay(app: &AppHandle) {
     let current_sid = pet::current_session_id();
     let mut dead_sessions = Vec::new();
 
+    // 单一桌宠模式：关闭非当前会话的桌宠窗口（切换会话后清理旧桌宠）
+    window::close_non_current_windows(app);
+
     {
         let app_state = app.state::<crate::AppState>();
         let mut sessions = app_state.sessions.lock().unwrap();
