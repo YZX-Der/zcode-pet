@@ -20,6 +20,8 @@ interface SessionInfo {
   state: string;
   effective_state: string;
   project: string | null;
+  title: string;
+  pet_enabled: boolean;
   ts: number;
 }
 
@@ -222,7 +224,7 @@ async function refreshSessions(): Promise<void> {
   try {
     const sessions = await invoke<SessionInfo[]>("list_sessions");
     if (sessions.length === 0) {
-      container.innerHTML = '<p class="empty-hint">暂无活跃会话。打开一个 ZCode 会话发条消息试试。</p>';
+      container.innerHTML = '<p class="empty-hint">暂无执行中的任务。提交任务后宠物会自动出现在屏幕右下角。</p>';
       return;
     }
     container.innerHTML = sessions.map((s, i) => {
@@ -232,20 +234,57 @@ async function refreshSessions(): Promise<void> {
       const shortId = s.session_id.length > 24
         ? s.session_id.slice(0, 12) + "…" + s.session_id.slice(-6)
         : s.session_id;
-      const project = s.project || "（未指定项目）";
+      const project = s.project || "";
+      const title = s.title || shortId;
+      const petCls = s.pet_enabled ? "on" : "off";
       return `
         <div class="session-card" style="animation-delay:${i * 0.06}s">
           <div class="session-state-dot" style="background:${color};box-shadow:0 0 8px ${color}"></div>
           <div class="session-info">
-            <div class="session-id">${shortId}</div>
-            <div class="session-meta">${project}</div>
+            <div class="session-title" title="${escapeHtml(title)}">${escapeHtml(title)}</div>
+            <div class="session-meta">${escapeHtml(shortId)}${project ? ` · ${escapeHtml(project)}` : ""}</div>
           </div>
-          <span class="session-state-tag" style="background:${color}1a;color:${color}">${label}</span>
+          <div class="session-actions">
+            <span class="session-state-tag" style="background:${color}1a;color:${color}">${label}</span>
+            <button class="session-action pet-toggle ${petCls}" data-action="toggle-pet" data-session="${s.session_id}"
+              title="${s.pet_enabled ? "关闭该会话的桌宠" : "打开该会话的桌宠"}">🐾</button>
+            <button class="session-action session-close" data-action="close-session" data-session="${s.session_id}"
+              title="关闭该会话（清理状态记录）">✕</button>
+          </div>
         </div>`;
     }).join("");
+
+    // 事件委托：桌宠开关 / 关闭会话
+    container.onclick = async (e) => {
+      const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-action]");
+      if (!btn) return;
+      const sessionId = btn.dataset.session!;
+      const action = btn.dataset.action!;
+      btn.disabled = true;
+      try {
+        if (action === "toggle-pet") {
+          await invoke("set_pet_enabled", { sessionId, enabled: btn.classList.contains("off") });
+        } else if (action === "close-session") {
+          await invoke("close_session", { sessionId });
+        }
+      } catch (err) {
+        console.error(`${action} failed:`, err);
+      } finally {
+        await refreshSessions();
+      }
+    };
   } catch (e) {
     container.innerHTML = `<p class="empty-hint">加载失败: ${e}</p>`;
   }
+}
+
+/** 会话标题可能包含 markdown/特殊字符，转义后渲染 */
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
 // ── 启动 ────────────────────────────────────────────────
