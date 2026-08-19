@@ -53,6 +53,28 @@
               </div>
 
               <div class="field field-row">
+                <label>状态气泡</label>
+                <label class="toggle">
+                  <input type="checkbox" id="bubble-enabled" checked />
+                  <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                </label>
+              </div>
+
+              <div class="field">
+                <div class="field-header">
+                  <label>气泡消失时间</label>
+                </div>
+                <div class="custom-select" id="bubble-seconds-wrap">
+                  <button class="cs-trigger" type="button">
+                    <span class="cs-value">3 秒</span>
+                    <span class="cs-arrow">⌄</span>
+                  </button>
+                  <div class="cs-dropdown"></div>
+                </div>
+                <p class="field-hint">状态变化时气泡自动消失；鼠标移入宠物可再次查看</p>
+              </div>
+
+              <div class="field field-row">
                 <label>始终置顶</label>
                 <label class="toggle">
                   <input type="checkbox" id="always-on-top" />

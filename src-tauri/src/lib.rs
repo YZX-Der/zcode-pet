@@ -15,7 +15,7 @@ mod window;
 use std::collections::HashMap;
 use std::sync::Mutex;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
-use tauri::{AppHandle, Manager, tray::TrayIconBuilder, WindowEvent};
+use tauri::{AppHandle, Emitter, Manager, tray::TrayIconBuilder, WindowEvent};
 
 /// 全局共享状态
 pub struct AppState {
@@ -28,14 +28,15 @@ pub struct SessionEntry {
     pub ts: i64,
 }
 
-/// 构建托盘菜单
-fn build_tray_menu(app: &tauri::AppHandle) -> Menu<tauri::Wry> {
+/// 构建宠物菜单（托盘 + 桌宠右键共用）：
+/// 切换宠物 / 显示宠物 / 隐藏宠物 / 显示主窗口 / 退出
+fn build_pet_menu(app: &tauri::AppHandle) -> Menu<tauri::Wry> {
     let show = MenuItem::with_id(app, "show-main", "显示主窗口", true, None::<&str>)
         .expect("show item");
-    let wake = MenuItem::with_id(app, "wake", "唤醒全部宠物", true, None::<&str>)
-        .expect("wake item");
-    let tuck = MenuItem::with_id(app, "tuck", "收起全部宠物", true, None::<&str>)
-        .expect("tuck item");
+    let pet_show = MenuItem::with_id(app, "pet-show", "显示宠物", true, None::<&str>)
+        .expect("pet-show item");
+    let pet_hide = MenuItem::with_id(app, "pet-hide", "隐藏宠物", true, None::<&str>)
+        .expect("pet-hide item");
     let quit = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)
         .expect("quit item");
     let sep = PredefinedMenuItem::separator(app).expect("separator");
@@ -68,18 +69,70 @@ fn build_tray_menu(app: &tauri::AppHandle) -> Menu<tauri::Wry> {
         }
     }
 
+    let _ = menu.append(&pet_show);
+    let _ = menu.append(&pet_hide);
+    let _ = menu.append(&sep.clone());
     let _ = menu.append(&show);
     let _ = menu.append(&sep.clone());
-    let _ = menu.append(&wake);
-    let _ = menu.append(&tuck);
-    let _ = menu.append(&PredefinedMenuItem::separator(app).expect("separator"));
     let _ = menu.append(&quit);
     menu
 }
 
+/// Tauri 命令：在桌宠窗口的鼠标位置弹出右键菜单（原生 NSMenu）。
+/// 必须放在子模块中（Tauri 2 的 command 宏在 crate root 会冲突）。
+mod cmd {
+    use crate::window;
+    use tauri::AppHandle;
+    use tauri::Manager;
+    use tauri::menu::ContextMenu;
+
+    #[tauri::command]
+    pub fn frontend_ready(app: AppHandle) {
+        window::show_main_window(&app);
+    }
+
+    /// 桌宠右键菜单：切换宠物 / 显示主窗口 / 退出。
+    /// 菜单位置移到窗口右侧（避开宠物窗口遮挡，不改变窗口 level）。
+    #[tauri::command]
+    pub fn show_pet_menu(app: AppHandle) -> Result<(), String> {
+        use tauri::PhysicalPosition;
+        let menu = crate::build_pet_menu(&app);
+        let Some(webview_window) = app.get_webview_window("pet") else {
+            return Ok(());
+        };
+        let win = webview_window.as_ref().window();
+
+        // 菜单显示在宠物像素右侧（canvas 宽 + 4px），贴近宠物且不被遮挡。
+        // 遮挡只来自宠物像素本体，气泡区是透明的，菜单显示在其上方不受影响。
+        let (menu_x, menu_y) = match (win.outer_size(), win.outer_position()) {
+            (Ok(_size), Ok(pos)) => {
+                // canvas 物理宽 = 精灵帧宽 × 用户缩放 × 屏幕缩放
+                let sf = win
+                    .current_monitor()
+                    .ok()
+                    .flatten()
+                    .map(|m| m.scale_factor())
+                    .unwrap_or(1.0);
+                let pet_scale = crate::settings::load().scale;
+                let canvas_w = (192.0 * pet_scale * sf) as i32;
+                // 菜单 y 跟随鼠标（相对窗口），限制在窗口高度内
+                let cursor = win
+                    .cursor_position()
+                    .unwrap_or(tauri::PhysicalPosition::new(pos.x as f64, pos.y as f64));
+                let rel_y = (cursor.y - pos.y as f64).clamp(0.0, 208.0 * pet_scale * sf - 20.0) as i32;
+                (canvas_w + 4, rel_y)
+            }
+            _ => (0, 0),
+        };
+
+        menu.popup_at(win, PhysicalPosition::new(menu_x, menu_y))
+            .map_err(|e| e.to_string())
+    }
+}
+
 /// 设置托盘图标
 fn setup_tray(app: &tauri::AppHandle) {
-    let menu = build_tray_menu(app);
+    let menu = build_pet_menu(app);
 
     let icon = app
         .default_window_icon()
@@ -100,18 +153,6 @@ fn setup_tray(app: &tauri::AppHandle) {
         .build(app);
 }
 
-/// Tauri 命令：前端加载完成后调用，激活并显示主窗口。
-/// （必须放在子模块中，Tauri 2 的 command 宏在 crate root 会冲突）
-mod cmd {
-    use crate::window;
-    use tauri::AppHandle;
-
-    #[tauri::command]
-    pub fn frontend_ready(app: AppHandle) {
-        window::show_main_window(&app);
-    }
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -130,8 +171,18 @@ pub fn run() {
             match id {
                 "quit" => app.exit(0),
                 "show-main" => window::show_main_window(app),
-                "wake" => window::show_all(app),
-                "tuck" => window::hide_all(app),
+                "pet-show" => {
+                    let mut s = settings::load();
+                    s.pet_hidden = false;
+                    let _ = settings::save(&s);
+                    window::set_pet_visible(app, true);
+                }
+                "pet-hide" => {
+                    let mut s = settings::load();
+                    s.pet_hidden = true;
+                    let _ = settings::save(&s);
+                    window::set_pet_visible(app, false);
+                }
                 other if other.starts_with("pet-select-") => {
                     let name = &other["pet-select-".len()..];
                     let mut settings = settings::load();
@@ -151,6 +202,14 @@ pub fn run() {
                 if let WindowEvent::CloseRequested { api, .. } = event {
                     api.prevent_close();
                     let _ = window.hide();
+                }
+            }
+            // 桌宠窗口聚焦时通知前端显示气泡：
+            // macOS 聚焦前不派发 hover 事件，聚焦后鼠标已在宠物上
+            // （无"移入"动作，mouseenter 不触发），需要主动提示一次
+            if window.label() == "pet" {
+                if let WindowEvent::Focused(true) = event {
+                    let _ = window.emit("pet://focused", ());
                 }
             }
         })
@@ -215,6 +274,7 @@ pub fn run() {
             dashboard::get_pet_sheet,
             installer::is_hooks_installed,
             installer::install_hooks,
+            cmd::show_pet_menu,
             cmd::frontend_ready
         ])
         .run(tauri::generate_context!())

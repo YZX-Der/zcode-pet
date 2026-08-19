@@ -13,14 +13,79 @@
         -webkit-user-select: none;
         user-select: none;
       }
+
+      .pet-layout {
+        position: relative;
+        width: 100%;
+        height: 100%;
+      }
+
+      /* 宠物永远固定在窗口左缘：靠近屏幕边缘也不会被挤出去 */
       #pet {
+        position: absolute;
+        left: 0;
+        top: 0;
         image-rendering: pixelated;
         image-rendering: crisp-edges;
+        cursor: pointer !important;
+      }
+
+      /* 状态气泡：像素风（硬边框 + 硬阴影 + 等宽字体） */
+      .state-bubble {
+        position: absolute;
+        right: 2px;
+        top: 6px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 10px;
+        background: #fff;
+        border: 2px solid #1a1a1a;
+        border-radius: 2px;
+        box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.2);
+        font-family: "SF Mono", "Courier New", monospace;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+        color: #1a1a1a;
+        white-space: nowrap;
+        pointer-events: none; /* 气泡区不拦截点击，只有宠物可点 */
+        opacity: 0;
+        transition: opacity 0.15s steps(3, end);
+        z-index: 10;
+      }
+      .state-bubble.visible { opacity: 1; }
+
+      /* 像素箭头（旋转 45° 的菱形）：气泡在右，箭头在左指向宠物 */
+      .state-bubble::before,
+      .state-bubble::after {
+        content: "";
+        position: absolute;
+        top: 50%;
+        width: 10px;
+        height: 10px;
+        transform: translateY(-50%) rotate(45deg);
+      }
+      .state-bubble::after { background: #1a1a1a; left: -6px; }
+      .state-bubble::before { background: #fff; left: -3px; }
+
+      /* 状态色方块 */
+      .bubble-dot {
+        width: 10px;
+        height: 10px;
+        border: 2px solid #1a1a1a;
+        flex-shrink: 0;
       }
     </style>
   </head>
   <body>
-    <canvas id="pet"></canvas>
+    <div class="pet-layout">
+      <canvas id="pet"></canvas>
+      <div id="state-bubble" class="state-bubble">
+        <span class="bubble-dot" id="bubble-dot"></span>
+        <span id="bubble-text">执行中</span>
+      </div>
+    </div>
     <script type="module" src="/src/pet-window.ts"></script>
   </body>
 </html>

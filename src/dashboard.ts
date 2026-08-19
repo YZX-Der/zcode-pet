@@ -13,6 +13,8 @@ interface Settings {
   pet: string;
   always_on_top: boolean;
   pet_hidden: boolean;
+  bubble_enabled: boolean;
+  bubble_seconds: number;
 }
 
 interface SessionInfo {
@@ -73,6 +75,8 @@ async function setupSettings(): Promise<void> {
   const petGrid = document.getElementById("pet-grid")!;
   const topEl = document.getElementById("always-on-top") as HTMLInputElement;
   const petVisibleEl = document.getElementById("pet-visible") as HTMLInputElement;
+  const bubbleEnabledEl = document.getElementById("bubble-enabled") as HTMLInputElement;
+  const bubbleSecondsWrap = document.getElementById("bubble-seconds-wrap")!;
 
   // 当前选中宠物（空则回退 zbuddy）
   let selectedPet = settings.pet || "zbuddy";
@@ -103,6 +107,20 @@ async function setupSettings(): Promise<void> {
   opacityEl.value = String(settings.opacity);
   topEl.checked = settings.always_on_top;
   petVisibleEl.checked = !settings.pet_hidden;
+  bubbleEnabledEl.checked = settings.bubble_enabled;
+
+  // 自定义下拉：气泡消失时长
+  initCustomSelect(
+    bubbleSecondsWrap,
+    [
+      { value: "2", label: "2 秒" },
+      { value: "3", label: "3 秒" },
+      { value: "5", label: "5 秒" },
+      { value: "10", label: "10 秒" },
+    ],
+    String(settings.bubble_seconds),
+    () => debouncedSave(),
+  );
 
   updateLabels();
   updateSliderProgress(scaleEl);
@@ -129,6 +147,7 @@ async function setupSettings(): Promise<void> {
   petVisibleEl.addEventListener("change", () => {
     void invoke("set_pet_visible", { visible: petVisibleEl.checked });
   });
+  bubbleEnabledEl.addEventListener("change", () => debouncedSave());
 }
 
 function updateLabels(): void {
@@ -145,10 +164,50 @@ function debouncedSave(): void {
   debounceTimer = window.setTimeout(() => { void save(); }, 300);
 }
 
+/** 初始化自定义下拉（液态玻璃风格）：选中值存 wrap.dataset.value */
+function initCustomSelect(
+  wrap: HTMLElement,
+  options: { value: string; label: string }[],
+  initial: string,
+  onChange: (value: string) => void,
+): void {
+  const trigger = wrap.querySelector(".cs-trigger") as HTMLButtonElement;
+  const valueEl = wrap.querySelector(".cs-value") as HTMLElement;
+  const dropdown = wrap.querySelector(".cs-dropdown") as HTMLElement;
+
+  const current = options.find((o) => o.value === initial) ?? options[0];
+  wrap.dataset.value = current.value;
+  valueEl.textContent = current.label;
+
+  dropdown.innerHTML = options
+    .map((o) => `<div class="cs-option${o.value === current.value ? " selected" : ""}" data-value="${o.value}">${o.label}</div>`)
+    .join("");
+
+  trigger.addEventListener("click", (e) => {
+    e.stopPropagation();
+    wrap.classList.toggle("open");
+  });
+  dropdown.addEventListener("click", (e) => {
+    const opt = (e.target as HTMLElement).closest<HTMLElement>(".cs-option");
+    if (!opt) return;
+    const value = opt.dataset.value!;
+    wrap.dataset.value = value;
+    valueEl.textContent = opt.textContent ?? value;
+    dropdown.querySelectorAll(".cs-option").forEach((o) => o.classList.remove("selected"));
+    opt.classList.add("selected");
+    wrap.classList.remove("open");
+    onChange(value);
+  });
+  // 点击外部关闭
+  document.addEventListener("click", () => wrap.classList.remove("open"));
+}
+
 async function save(): Promise<void> {
   const scaleEl = document.getElementById("scale") as HTMLInputElement;
   const opacityEl = document.getElementById("opacity") as HTMLInputElement;
   const topEl = document.getElementById("always-on-top") as HTMLInputElement;
+  const bubbleEnabledEl = document.getElementById("bubble-enabled") as HTMLInputElement;
+  const bubbleSecondsWrap = document.getElementById("bubble-seconds-wrap")!;
 
   // pet_hidden 不在此处保存（由 set_pet_visible 命令管理，避免覆盖）
   const newSettings: Omit<Settings, "pet_hidden"> = {
@@ -156,6 +215,8 @@ async function save(): Promise<void> {
     opacity: parseFloat(opacityEl.value),
     pet: currentPet,
     always_on_top: topEl.checked,
+    bubble_enabled: bubbleEnabledEl.checked,
+    bubble_seconds: parseFloat(bubbleSecondsWrap.dataset.value || "3"),
   };
 
   try {

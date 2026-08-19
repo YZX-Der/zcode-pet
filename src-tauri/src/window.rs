@@ -6,6 +6,8 @@ use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 
 const SPRITE_W: f64 = 192.0;
 const SPRITE_H: f64 = 208.0;
+/// 状态气泡区宽度（固定逻辑像素，不随 scale 缩放）
+const BUBBLE_W: f64 = 96.0;
 const MARGIN: f64 = 16.0;
 /// 单一桌宠窗口固定 label
 const PET_LABEL: &str = "pet";
@@ -95,7 +97,8 @@ pub fn ensure_window(app: &AppHandle, _session_id: &str, state: &str, _force: bo
 
     let scale = settings.scale;
     let opacity = settings.opacity;
-    let frame_w = SPRITE_W * scale;
+    // 窗口宽 = 宠物宽 + 气泡区（固定 110 逻辑像素）
+    let frame_w = SPRITE_W * scale + BUBBLE_W;
     let frame_h = SPRITE_H * scale;
     let position = next_position(app);
 
@@ -109,7 +112,9 @@ pub fn ensure_window(app: &AppHandle, _session_id: &str, state: &str, _force: bo
         .skip_taskbar(true)
         .resizable(false)
         .visible(true)
-        .accept_first_mouse(true)
+        // 第一次点击只聚焦窗口（不触发跳转/事件），第二次点击才响应——
+        // 避免误触跳转，且聚焦后 hover 事件（气泡显示）才生效
+        .accept_first_mouse(false)
         .on_page_load(move |webview, payload| {
             if matches!(payload.event(), tauri::webview::PageLoadEvent::Finished) {
                 log::info!("pet.html loaded");
@@ -216,7 +221,7 @@ fn next_position(app: &AppHandle) -> Option<(f64, f64)> {
 
     let settings = crate::settings::load();
     let frame_h = SPRITE_H * settings.scale;
-    let frame_w = SPRITE_W * settings.scale;
+    let frame_w = SPRITE_W * settings.scale + BUBBLE_W;
 
     // 固定右下角
     let x = screen_w - frame_w - MARGIN;
@@ -277,7 +282,7 @@ pub fn hide_all(app: &AppHandle) {
 pub fn recreate_all(app: &AppHandle) {
     let settings = crate::settings::load();
     let scale = settings.scale;
-    let frame_w = SPRITE_W * scale;
+    let frame_w = SPRITE_W * scale + BUBBLE_W;
     let frame_h = SPRITE_H * scale;
     let pet_name = settings.pet.clone();
     let opacity = settings.opacity;

@@ -23,6 +23,12 @@ pub struct Settings {
     /// 桌宠全局开关（false=显示，true=隐藏）
     #[serde(default)]
     pub pet_hidden: bool,
+    /// 状态气泡开关
+    #[serde(default = "default_true")]
+    pub bubble_enabled: bool,
+    /// 气泡自动消失时长（秒）
+    #[serde(default = "default_bubble_seconds")]
+    pub bubble_seconds: f64,
 }
 
 fn default_scale() -> f64 {
@@ -37,6 +43,9 @@ fn default_pet() -> String {
 fn default_true() -> bool {
     true
 }
+fn default_bubble_seconds() -> f64 {
+    3.0
+}
 
 impl Default for Settings {
     fn default() -> Self {
@@ -46,6 +55,8 @@ impl Default for Settings {
             pet: default_pet(),
             always_on_top: default_true(),
             pet_hidden: false,
+            bubble_enabled: default_true(),
+            bubble_seconds: default_bubble_seconds(),
         }
     }
 }
@@ -93,6 +104,8 @@ pub fn save_settings(app: AppHandle, settings: Settings) -> Result<Settings, Str
     merged.opacity = settings.opacity;
     merged.pet = settings.pet.clone();
     merged.always_on_top = settings.always_on_top;
+    merged.bubble_enabled = settings.bubble_enabled;
+    merged.bubble_seconds = settings.bubble_seconds;
     save(&merged)?;
     // 更新全局 pet_name
     let state = app.state::<crate::AppState>();
