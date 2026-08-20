@@ -28,7 +28,7 @@
 
 ### 方式一：下载发行包（推荐）
 
-1. 从 [Releases](https://github.com/YZX-Der/zcode-pet/releases) 下载 `zcode-pet_0.2.2_aarch64.dmg`
+1. 从 [Releases](https://github.com/YZX-Der/zcode-pet/releases) 下载 `zcode-pet_0.2.3_aarch64.dmg`
 2. 打开 dmg，将 zcode-pet 拖到「应用程序」文件夹
 3. 首次打开：右键 -> 打开（绕过 Gatekeeper）
 4. 启动后打开「说明」页，点击「一键安装」启用 hooks 联动
@@ -145,11 +145,13 @@ cp -r downloaded-pet ~/.zcode-pet/pets/my-pet/
 
 | 菜单项 | 功能 |
 |-------|------|
+| 🦊 当前会话 | 会话信息区：模型 / 思考等级 / 上下文 / Token / 缓存命中 / 思考 |
 | 切换宠物 -> | 选择当前宠物 |
 | 显示宠物 / 隐藏宠物 | 显示或隐藏桌宠窗口 |
 | 显示主窗口 | 打开 Dashboard 控制面板 |
 | 退出 | 退出应用 |
 
+> 托盘右键菜单顶部显示**当前会话详情**（实时读取）：模型、思考等级（reasoning effort）、上下文容量、Token 使用量、缓存命中率、思考 token。每次打开菜单都是最新数据。
 > 桌宠上右键可弹出同样的菜单（在宠物右侧展开），无需到托盘操作。
 
 ## 开发

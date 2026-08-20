@@ -109,6 +109,9 @@ async function loadAndRender(): Promise<void> {
   const scale = init.scale ?? 1;
   const opacity = init.opacity ?? 1;
   baseOpacity = opacity;
+  // 首次加载时用初始状态填充（重启后无 pet://state 事件时 currentState 为 null，
+  // 会导致 hover/聚焦气泡不显示）
+  currentState = currentState ?? init.state;
 
   // 加载 manifest
   const manifestUrl = convertFileSrc(sheetPath.replace(/spritesheet\.\w+$/, "pet.json"));
@@ -120,10 +123,12 @@ async function loadAndRender(): Promise<void> {
   // 获取 canvas（始终用同一个 DOM 元素，不 clone）
   const canvas = document.getElementById("pet") as HTMLCanvasElement;
   canvas.style.opacity = String(effectiveOpacity(currentState ?? init.state, opacity));
-  // 气泡左缘贴宠物右侧 6px（left 定位，避免文字长短导致距离变化）
+  // 气泡左缘贴宠物右侧 6px（直接用精灵帧宽 × scale 计算，
+  // 不能用 canvas.offsetWidth——animator.load 之前 canvas 还是默认尺寸 300px，
+  // 会把气泡定位到窗口外）
   const bubble = document.getElementById("state-bubble");
   if (bubble) {
-    bubble.style.left = `${canvas.offsetWidth + 6}px`;
+    bubble.style.left = `${192 * scale + 6}px`;
     bubble.style.right = "auto";
   }
 

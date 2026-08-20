@@ -152,6 +152,10 @@ pub fn ensure_window(app: &AppHandle, _session_id: &str, state: &str, _force: bo
                             let _: () = msg_send![ns_window, setCollectionBehavior: behavior];
                             let _: () = msg_send![ns_window, setOpaque: false];
                             let _: () = msg_send![ns_window, setHasShadow: false];
+                            // 非聚焦窗口也接收鼠标移动事件：
+                            // 否则 macOS 默认不向非 key window 派发 hover，
+                            // 重启后未点击聚焦时气泡无法通过移入显示
+                            let _: () = msg_send![ns_window, setAcceptsMouseMovedEvents: true];
                         }
                     });
                 }

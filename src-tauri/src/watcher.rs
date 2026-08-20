@@ -32,6 +32,8 @@ fn handle_state_file(app: &AppHandle, path: &Path) {
     }
 
     window::ensure_window(app, &state.session_id, &state.state, true);
+    // 刷新托盘菜单（当前会话信息区实时更新）
+    crate::refresh_tray_menu(app);
 }
 
 /// 启动文件监听器（独立线程，debounce 200ms）。
@@ -143,4 +145,7 @@ fn apply_decay(app: &AppHandle) {
         let _ = std::fs::remove_file(&file);
         log::info!("reaped dead session {sid}");
     }
+
+    // 刷新托盘菜单（Token 用量等可能在无 hook 事件时变化，定时兜底）
+    crate::refresh_tray_menu(app);
 }

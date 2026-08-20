@@ -138,3 +138,88 @@ pub fn get_pet_sheet(pet_name: String) -> Result<PetSheetInfo, String> {
         sheet_path: path.display().to_string(),
     })
 }
+
+// ── 会话详情（托盘菜单信息区）──────────────────────────
+
+/// 当前会话详情（模型/思考等级/上下文/Token/缓存），从 rollout 尾部读取。
+#[derive(Serialize)]
+pub struct SessionDetail {
+    pub model: String,
+    pub thinking: String,
+    pub context: String,
+    pub token_total: String,
+    pub cache_rate: String,
+    pub reasoning: String,
+}
+
+/// 格式化数字为 K 单位（>=1000 时保留 1 位小数）。
+fn fmt_k(n: u64) -> String {
+    if n >= 1000 {
+        format!("{:.1}K", n as f64 / 1000.0)
+    } else {
+        n.to_string()
+    }
+}
+
+/// 读取当前会话 rollout 文件尾部，解析最后一条完整记录提取会话详情。
+pub fn session_detail() -> Option<SessionDetail> {
+    use std::io::{Read, Seek, SeekFrom};
+
+    let sid = pet::current_session_id()?;
+    let path = pet::home()
+        .join(".zcode")
+        .join("cli")
+        .join("rollout")
+        .join(format!("model-io-{sid}.jsonl"));
+    let mut file = std::fs::File::open(path).ok()?;
+    let size = file.metadata().ok()?.len();
+    if size == 0 {
+        return None;
+    }
+    // 只读尾部最多 1MB，避免全量解析大文件
+    let read_len = size.min(1_000_000);
+    file.seek(SeekFrom::Start(size - read_len)).ok()?;
+    let mut buf = vec![0u8; read_len as usize];
+    file.read_exact(&mut buf).ok()?;
+    let text = String::from_utf8_lossy(&buf);
+
+    // 从尾部往前找最后一条能完整解析的 JSON 行
+    let mut record: Option<serde_json::Value> = None;
+    for line in text.lines().rev() {
+        if let Ok(v) = serde_json::from_str::<serde_json::Value>(line.trim()) {
+            record = Some(v);
+            break;
+        }
+    }
+    let rec = record?;
+
+    let model = rec["model"]["modelId"].as_str()?.to_string();
+    let thinking = rec["request"]["body"]["reasoning_effort"]
+        .as_str()
+        .unwrap_or("?")
+        .to_string();
+    let context = rec["request"]["maxOutputTokens"]
+        .as_u64()
+        .map(fmt_k)
+        .unwrap_or_else(|| "?".into());
+    let usage = &rec["response"]["usage"];
+    let input = usage["inputTokens"].as_u64().unwrap_or(0);
+    let total = usage["totalTokens"].as_u64().unwrap_or(0);
+    let cache_read = usage["cacheReadTokens"].as_u64().unwrap_or(0);
+    let reasoning = usage["reasoningTokens"].as_u64().unwrap_or(0);
+    // 缓存命中率 = 缓存读取 / 总输入
+    let cache_rate = if input > 0 {
+        format!("{:.1}% ({})", cache_read as f64 / input as f64 * 100.0, fmt_k(cache_read))
+    } else {
+        "-".into()
+    };
+
+    Some(SessionDetail {
+        model,
+        thinking,
+        context,
+        token_total: fmt_k(total),
+        cache_rate,
+        reasoning: fmt_k(reasoning),
+    })
+}

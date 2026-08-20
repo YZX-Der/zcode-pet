@@ -28,7 +28,7 @@ pub struct SessionEntry {
     pub ts: i64,
 }
 
-/// 构建宠物菜单（托盘 + 桌宠右键共用）：
+/// 构建桌宠右键菜单：
 /// 切换宠物 / 显示宠物 / 隐藏宠物 / 显示主窗口 / 退出
 fn build_pet_menu(app: &tauri::AppHandle) -> Menu<tauri::Wry> {
     let show = MenuItem::with_id(app, "show-main", "显示主窗口", true, None::<&str>)
@@ -42,6 +42,75 @@ fn build_pet_menu(app: &tauri::AppHandle) -> Menu<tauri::Wry> {
     let sep = PredefinedMenuItem::separator(app).expect("separator");
 
     let menu = Menu::new(app).expect("menu");
+
+    // 宠物切换子菜单
+    let pet_names = pet::list_pets();
+    if !pet_names.is_empty() {
+        let pet_items: Vec<MenuItem<tauri::Wry>> = pet_names
+            .iter()
+            .filter_map(|name| {
+                MenuItem::with_id(
+                    app,
+                    format!("pet-select-{name}"),
+                    name,
+                    true,
+                    None::<&str>,
+                )
+                .ok()
+            })
+            .collect();
+
+        if let Ok(sub) = Submenu::new(app, "切换宠物", true) {
+            for item in &pet_items {
+                let _ = sub.append(item);
+            }
+            let _ = menu.append(&sub);
+            let _ = menu.append(&sep.clone());
+        }
+    }
+
+    let _ = menu.append(&pet_show);
+    let _ = menu.append(&pet_hide);
+    let _ = menu.append(&sep.clone());
+    let _ = menu.append(&show);
+    let _ = menu.append(&sep.clone());
+    let _ = menu.append(&quit);
+    menu
+}
+
+/// 构建托盘菜单：当前会话信息区 + 切换宠物 / 显示隐藏宠物 / 显示主窗口 / 退出
+fn build_tray_menu(app: &tauri::AppHandle) -> Menu<tauri::Wry> {
+    let show = MenuItem::with_id(app, "show-main", "显示主窗口", true, None::<&str>)
+        .expect("show item");
+    let pet_show = MenuItem::with_id(app, "pet-show", "显示宠物", true, None::<&str>)
+        .expect("pet-show item");
+    let pet_hide = MenuItem::with_id(app, "pet-hide", "隐藏宠物", true, None::<&str>)
+        .expect("pet-hide item");
+    let quit = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)
+        .expect("quit item");
+    let sep = PredefinedMenuItem::separator(app).expect("separator");
+
+    let menu = Menu::new(app).expect("menu");
+
+    // 当前会话信息区（实时读取 rollout；用 enabled 项保证黑色文字可读，
+    // info-* id 在 on_menu_event 中默认忽略，点击无操作）
+    if let Some(detail) = dashboard::session_detail() {
+        let info_items = [
+            "🦊 当前会话",
+            &format!("模型: {}", detail.model),
+            &format!("思考等级: {}", detail.thinking),
+            &format!("上下文: {}", detail.context),
+            &format!("Token: {} / {}", detail.token_total, detail.context),
+            &format!("缓存命中: {}", detail.cache_rate),
+            &format!("思考: {}", detail.reasoning),
+        ];
+        for (i, text) in info_items.iter().enumerate() {
+            if let Ok(item) = MenuItem::with_id(app, format!("info-{i}"), *text, true, None::<&str>) {
+                let _ = menu.append(&item);
+            }
+        }
+        let _ = menu.append(&sep.clone());
+    }
 
     // 宠物切换子菜单
     let pet_names = pet::list_pets();
@@ -130,9 +199,18 @@ mod cmd {
     }
 }
 
+/// 刷新托盘菜单（后台调用，不阻塞点击弹出）。
+/// 在会话状态变化/定时衰减时更新，保证打开菜单时内容是最新的。
+pub fn refresh_tray_menu(app: &tauri::AppHandle) {
+    let menu = build_tray_menu(app);
+    if let Some(tray) = app.tray_by_id("main") {
+        let _ = tray.set_menu(Some(menu));
+    }
+}
+
 /// 设置托盘图标
 fn setup_tray(app: &tauri::AppHandle) {
-    let menu = build_pet_menu(app);
+    let menu = build_tray_menu(app);
 
     let icon = app
         .default_window_icon()
