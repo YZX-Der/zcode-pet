@@ -345,6 +345,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             activate::activate_target,
+            activate::is_zcode_frontmost,
             settings::get_settings,
             settings::save_settings,
             settings::list_pets,

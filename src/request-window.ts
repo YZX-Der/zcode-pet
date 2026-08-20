@@ -58,6 +58,17 @@ async function initRequest(): Promise<void> {
 
   // 超时自动关闭
   window.setTimeout(() => void getCurrentWindow().close(), AUTO_CLOSE_MS);
+
+  // 用户切回 ZCode 窗口时自动关闭（ZCode 前台可见权限框，弹窗不再需要）
+  window.setInterval(async () => {
+    try {
+      if (await invoke<boolean>("is_zcode_frontmost")) {
+        void getCurrentWindow().close();
+      }
+    } catch {
+      // ignore
+    }
+  }, 2000);
 }
 
 (window as any).initRequest = initRequest;

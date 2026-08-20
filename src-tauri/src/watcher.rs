@@ -36,7 +36,10 @@ fn handle_state_file(app: &AppHandle, path: &Path) {
     // 其他会话的状态变化（如正在执行的真实会话持续写 running）不干扰弹窗开关
     if pet::current_session_id().as_deref() == Some(state.session_id.as_str()) {
         if state.state == "needs_input" {
-            window::show_request_window(app);
+            // 用户已在 ZCode 窗口时只保留气泡提示，不弹确认窗（避免遮挡权限框）
+            if !crate::activate::is_zcode_frontmost() {
+                window::show_request_window(app);
+            }
         } else {
             window::close_request_window(app);
         }

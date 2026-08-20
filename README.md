@@ -15,7 +15,7 @@
 - 🐾 **单一桌宠**：一只宠物始终跟随当前 ZCode 会话，切换会话时无缝切换状态（不重建窗口）
 - 🔄 **状态联动**：通过 ZCode hooks 实时反映任务状态 -- Running / Needs input / Ready / Blocked / Idle / Sleep
 - 💬 **状态气泡**：状态变化时气泡闪现（像素风箭头指向宠物），时长可配置；鼠标移入宠物可随时查看
-- ⚠️ **权限确认弹窗**：ZCode 需要确认权限（执行命令/写文件等）时，桌宠在气泡下方弹出确认窗，显示工具名/风险/参数摘要，一键跳转 ZCode 确认
+- ⚠️ **权限确认弹窗**：ZCode 需要确认权限（执行命令/写文件等）时，桌宠在气泡下方弹出确认窗，显示工具名/风险/参数摘要，一键跳转 ZCode 确认；**已在 ZCode 窗口时只显示气泡提示，不弹窗遮挡**
 - 💤 **智能衰减**：长时间无活动桌宠变淡（35% 透明度）但不消失；非当前会话自动回收
 - ⚙️ **Dashboard 控制面板**：macOS 26 液态玻璃风格，配置页 + 会话列表 + 使用说明
 - 🎨 **宠物图片网格**：可视化选择宠物，实时预览大小/透明度效果
@@ -29,7 +29,7 @@
 
 ### 方式一：下载发行包（推荐）
 
-1. 从 [Releases](https://github.com/YZX-Der/zcode-pet/releases) 下载 `zcode-pet_0.2.4_aarch64.dmg`
+1. 从 [Releases](https://github.com/YZX-Der/zcode-pet/releases) 下载 `zcode-pet_0.2.5_aarch64.dmg`
 2. 打开 dmg，将 zcode-pet 拖到「应用程序」文件夹
 3. 首次打开：右键 -> 打开（绕过 Gatekeeper）
 4. 启动后打开「说明」页，点击「一键安装」启用 hooks 联动
