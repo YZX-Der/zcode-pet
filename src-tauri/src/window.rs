@@ -173,6 +173,119 @@ pub fn close_pet_window(app: &AppHandle) {
     }
 }
 
+/// 权限确认弹窗窗口 label。
+const REQUEST_LABEL: &str = "pet-request";
+/// 确认弹窗尺寸（逻辑像素）。
+const REQUEST_W: f64 = 280.0;
+const REQUEST_H: f64 = 180.0;
+
+/// 将确认弹窗定位到状态气泡框下方（气泡在桌宠窗口内右侧，
+/// 弹窗对齐气泡框左缘、紧贴其下方；超出屏幕时向内收）。
+fn position_request_near_pet(window: &tauri::WebviewWindow, app: &AppHandle) {
+    let Some(pet) = app.get_webview_window(PET_LABEL) else { return };
+    let (Ok(pet_pos), Ok(pet_size)) = (pet.outer_position(), pet.outer_size()) else { return };
+    let Some(monitor) = app.primary_monitor().ok().flatten() else { return };
+    let sf = monitor.scale_factor();
+    let screen_w = monitor.size().width as f64 / sf;
+    let screen_h = monitor.size().height as f64 / sf;
+
+    let pet_x = pet_pos.x as f64 / sf;
+    let pet_y = pet_pos.y as f64 / sf;
+    let pet_w = pet_size.width as f64 / sf;
+
+    // 气泡框在桌宠窗口内的位置：canvas 宽（192×scale）+ 6px 起，顶部 6px，高约 30px
+    let pet_scale = crate::settings::load().scale;
+    let canvas_w = 192.0 * pet_scale;
+    const BUBBLE_TOP: f64 = 6.0;
+    const BUBBLE_H: f64 = 30.0;
+    let bubble_x = pet_x + canvas_w + 6.0;
+    let bubble_bottom = pet_y + BUBBLE_TOP + BUBBLE_H;
+
+    // 弹窗对齐气泡框左缘，放在气泡下方
+    let mut x = bubble_x;
+    let mut y = bubble_bottom + 4.0;
+
+    // 右侧超出屏幕 -> 弹窗放到桌宠左侧（气泡区也在左侧方向）
+    if x + REQUEST_W > screen_w {
+        x = (pet_x - REQUEST_W - 8.0).max(0.0);
+    }
+    // 底部超出屏幕 -> 弹窗放到气泡上方
+    if y + REQUEST_H > screen_h {
+        y = (pet_y - REQUEST_H - 6.0).max(0.0);
+    }
+    // 避免压住宠物窗口（窗口宽度 pet_w）
+    if x < pet_x + pet_w && x + REQUEST_W > pet_x {
+        // 弹窗与桌宠水平重叠时，放到桌宠右侧（若空间不足则保持）
+        if pet_x + pet_w + REQUEST_W + 8.0 <= screen_w {
+            x = pet_x + pet_w + 8.0;
+        }
+    }
+
+    let _ = window.set_position(tauri::LogicalPosition::new(x, y));
+}
+
+/// 显示权限确认弹窗（不存在则创建）。
+/// 创建时用 visible(false) + show()，不 set_focus——避免激活应用导致主窗口前置。
+pub fn show_request_window(app: &AppHandle) {
+    // 已存在 -> 只显示（不聚焦，不打扰）
+    if let Some(window) = app.get_webview_window(REQUEST_LABEL) {
+        let _ = window.show();
+        return;
+    }
+
+    let builder = WebviewWindowBuilder::new(app, REQUEST_LABEL, WebviewUrl::App("request.html".into()))
+        .title("")
+        .inner_size(REQUEST_W, REQUEST_H)
+        .decorations(false)
+        .transparent(true)
+        .always_on_top(true)
+        .skip_taskbar(true)
+        .resizable(false)
+        .visible(false)
+        .accept_first_mouse(false)
+        .on_page_load(move |webview, payload| {
+            if matches!(payload.event(), tauri::webview::PageLoadEvent::Finished) {
+                log::info!("request.html loaded");
+                let _ = webview.eval("window.__REQUEST_READY__ = true; if (typeof window.initRequest === 'function') window.initRequest();");
+            }
+        });
+
+    match builder.build() {
+        Ok(window) => {
+            position_request_near_pet(&window, app);
+            // 跨 Space 显示：否则切换全屏 Space 时弹窗会消失（objc 必须在主线程）
+            #[cfg(target_os = "macos")]
+            {
+                let ns_window_ptr = window.ns_window().unwrap_or(std::ptr::null_mut());
+                if !ns_window_ptr.is_null() {
+                    let app_handle = app.clone();
+                    let ns_window_addr = ns_window_ptr as usize;
+                    let _ = app_handle.run_on_main_thread(move || {
+                        let ns_window = ns_window_addr as *mut objc::runtime::Object;
+                        unsafe {
+                            // CanJoinAllSpaces=1 | Stationary=4 | FullScreenAuxiliary=128 | IgnoresCycle=1024
+                            let behavior: u64 = 1 | 4 | 128 | 1024;
+                            let _: () = msg_send![ns_window, setCollectionBehavior: behavior];
+                        }
+                    });
+                }
+            }
+            // show() 不激活应用，避免主窗口被前置
+            let _ = window.show();
+            log::info!("created request window");
+        }
+        Err(e) => log::error!("failed to create request window: {e}"),
+    }
+}
+
+/// 关闭权限确认弹窗。
+pub fn close_request_window(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window(REQUEST_LABEL) {
+        let _ = window.close();
+        log::info!("closed request window");
+    }
+}
+
 /// 显示/隐藏桌宠窗口（全局开关）。
 pub fn set_pet_visible(app: &AppHandle, visible: bool) {
     if visible {

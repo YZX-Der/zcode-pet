@@ -32,6 +32,15 @@ fn handle_state_file(app: &AppHandle, path: &Path) {
     }
 
     window::ensure_window(app, &state.session_id, &state.state, true);
+    // 权限请求弹窗只由当前会话控制：
+    // 其他会话的状态变化（如正在执行的真实会话持续写 running）不干扰弹窗开关
+    if pet::current_session_id().as_deref() == Some(state.session_id.as_str()) {
+        if state.state == "needs_input" {
+            window::show_request_window(app);
+        } else {
+            window::close_request_window(app);
+        }
+    }
     // 刷新托盘菜单（当前会话信息区实时更新）
     crate::refresh_tray_menu(app);
 }

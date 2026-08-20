@@ -19,6 +19,7 @@ export default defineConfig({
       input: {
         main: resolve(__dirname, "index.html"),
         pet: resolve(__dirname, "pet.html"),
+        request: resolve(__dirname, "request.html"),
       },
     },
   },

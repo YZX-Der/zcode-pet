@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>请求确认</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body {
+        width: 100%; height: 100%;
+        overflow: hidden;
+        background: transparent;
+        -webkit-user-select: none;
+        user-select: none;
+        font-family: "SF Mono", "PingFang SC", "Courier New", monospace;
+      }
+
+      /* 像素风卡片：与桌宠气泡风格一致（白底 + 2px 黑边框 + 硬阴影） */
+      .req-card {
+        width: 100%; height: 100%;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        padding: 10px 12px;
+        background: #fff;
+        border: 2px solid #1a1a1a;
+        border-radius: 2px;
+        box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.2);
+      }
+
+      .req-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      /* 像素感叹号方块图标 */
+      .req-title {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+        color: #1a1a1a;
+      }
+      .req-title::before {
+        content: "!";
+        display: inline-block;
+        width: 15px;
+        height: 15px;
+        background: #ff3b30;
+        color: #fff;
+        font-size: 11px;
+        font-weight: 700;
+        text-align: center;
+        line-height: 13px;
+        border: 1.5px solid #1a1a1a;
+        box-shadow: 1px 1px 0 rgba(0,0,0,0.2);
+      }
+      .req-risk {
+        font-size: 9px;
+        font-weight: 700;
+        padding: 1px 6px;
+        border: 1.5px solid #1a1a1a;
+        border-radius: 2px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+      .req-risk.low { color: #34c759; border-color: #34c759; }
+      .req-risk.medium { color: #f5a623; border-color: #f5a623; }
+      .req-risk.high { color: #ff3b30; border-color: #ff3b30; }
+
+      .req-tool {
+        font-size: 13px;
+        font-weight: 700;
+        color: #1a1a1a;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .req-detail {
+        flex: 1;
+        min-height: 0;
+        font-size: 10px;
+        line-height: 1.5;
+        color: #444;
+        background: rgba(0, 0, 0, 0.04);
+        border: 1.5px solid #ddd;
+        border-radius: 2px;
+        padding: 6px 8px;
+        overflow-y: auto;
+        word-break: break-all;
+      }
+      .req-detail::-webkit-scrollbar { width: 4px; }
+      .req-detail::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 2px; }
+
+      .req-reason {
+        font-size: 9px;
+        color: #888;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .req-actions {
+        display: flex;
+        gap: 6px;
+      }
+      .req-btn {
+        flex: 1;
+        padding: 5px 0;
+        font-size: 11px;
+        font-weight: 700;
+        font-family: inherit;
+        border: 1.5px solid #1a1a1a;
+        border-radius: 2px;
+        background: #fff;
+        color: #1a1a1a;
+        cursor: pointer;
+        transition: all 0.15s steps(2, end);
+      }
+      .req-btn:hover { transform: translateY(-1px); box-shadow: 1px 1px 0 rgba(0,0,0,0.2); }
+      .req-btn.primary { background: #5b7cfa; color: #fff; }
+      .req-btn.primary:hover { background: #4a6be8; }
+    </style>
+  </head>
+  <body>
+    <div class="req-card">
+      <div class="req-header">
+        <span class="req-title">需要确认</span>
+        <span class="req-risk" id="req-risk">medium</span>
+      </div>
+      <div class="req-tool" id="req-tool">Tool</div>
+      <div class="req-detail" id="req-detail">加载中...</div>
+      <div class="req-reason" id="req-reason"></div>
+      <div class="req-actions">
+        <button class="req-btn" id="btn-dismiss">知道了</button>
+        <button class="req-btn primary" id="btn-go">前往确认</button>
+      </div>
+    </div>
+    <script type="module" src="/src/request-window.ts"></script>
+  </body>
+</html>

@@ -7,6 +7,7 @@ extern crate objc;
 mod activate;
 mod dashboard;
 mod installer;
+mod permission;
 mod pet;
 mod settings;
 mod watcher;
@@ -352,6 +353,8 @@ pub fn run() {
             dashboard::get_pet_sheet,
             installer::is_hooks_installed,
             installer::install_hooks,
+            permission::get_pending_request,
+            permission::clear_pending_request,
             cmd::show_pet_menu,
             cmd::frontend_ready
         ])

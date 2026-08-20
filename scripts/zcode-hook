@@ -4,8 +4,9 @@
 #
 # 用法（由 ZCode hooks 调用）：zcode-hook <Event>
 # 环境变量（ZCode hook 运行时注入）：CLAUDE_SESSION_ID / CLAUDE_PROJECT_DIR
+# stdin：ZCode 传入的 hook 输入 JSON（tool_name / tool_input / requestId / riskLevel 等）
 #
-# 约束：ZCode hooks 内联执行，本脚本必须 <10ms、零输出、退出码恒 0。
+# 约束：除预授权 decision 外零输出；退出码恒 0；PermissionRequest 分支 python3 兜底。
 
 set -u
 
@@ -30,7 +31,76 @@ esac
 STATE_DIR="$HOME/.zcode-pet/state"
 mkdir -p "$STATE_DIR" 2>/dev/null || exit 0
 
-# JSON 最小转义（双引号与反斜杠）；仅用户可控路径需要
+# PermissionRequest：python3 写请求详情（供桌宠确认弹窗展示）+ needs_input 状态
+# 零输出（ZCode 走正常权限 UI）
+if [ "$EVENT" = "PermissionRequest" ]; then
+  # stdin 先写入临时文件（heredoc 会占用 stdin，python3 无法直接读）
+  HOOK_INPUT="$HOME/.zcode-pet/.hook-input.$$.json"
+  cat > "$HOOK_INPUT" 2>/dev/null
+  python3 -c '
+import json
+import os
+import sys
+import time
+from pathlib import Path
+
+input_path, session_id, project_dir = sys.argv[1], sys.argv[2], sys.argv[3]
+pet_home = Path(os.path.expanduser("~")) / ".zcode-pet"
+
+# 读 hook 输入 JSON
+try:
+    data = json.loads(Path(input_path).read_text(encoding="utf-8")) if Path(input_path).exists() else {}
+except Exception:
+    data = {}
+
+tool_name = data.get("tool_name") or data.get("toolName") or ""
+tool_input = data.get("tool_input") or data.get("toolInput") or {}
+request_id = data.get("requestId") or data.get("request_id") or f"perm_{int(time.time())}"
+risk_level = data.get("riskLevel") or data.get("risk_level") or "medium"
+reason = data.get("reason") or f"Tool {tool_name} requires approval"
+ts = int(time.time())
+
+# 写请求详情（供桌宠确认弹窗展示）
+try:
+    req_dir = pet_home / "requests"
+    req_dir.mkdir(parents=True, exist_ok=True)
+    summary = json.dumps(tool_input, ensure_ascii=False)[:120] if tool_input else ""
+    (req_dir / f"{request_id}.json").write_text(json.dumps({
+        "request_id": request_id,
+        "tool": tool_name,
+        "input_summary": summary,
+        "risk": risk_level,
+        "reason": reason,
+        "ts": ts,
+    }, ensure_ascii=False), encoding="utf-8")
+except Exception:
+    pass
+
+# 写 needs_input 状态
+try:
+    (pet_home / "state").mkdir(parents=True, exist_ok=True)
+    state_file = pet_home / "state" / f"{session_id}.json"
+    tmp = pet_home / "state" / f".{session_id}.tmp"
+    project = Path(project_dir).name if project_dir else ""
+    content = json.dumps({
+        "version": 1,
+        "session_id": session_id,
+        "state": "needs_input",
+        "event": "PermissionRequest",
+        "project": project,
+        "project_dir": project_dir,
+        "ts": ts,
+    }, ensure_ascii=False)
+    tmp.write_text(content, encoding="utf-8")
+    tmp.replace(state_file)
+except Exception:
+    pass
+' "$HOOK_INPUT" "$SESSION_ID" "$PROJECT_DIR" 2>/dev/null
+  rm -f "$HOOK_INPUT"
+  exit 0
+fi
+
+# 其他事件：写状态文件
 esc() { printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'; }
 
 PROJECT=""
