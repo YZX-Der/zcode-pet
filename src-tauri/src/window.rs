@@ -180,10 +180,10 @@ const REQUEST_W: f64 = 280.0;
 const REQUEST_H: f64 = 180.0;
 
 /// 将确认弹窗定位到状态气泡框下方（气泡在桌宠窗口内右侧，
-/// 弹窗对齐气泡框左缘、紧贴其下方；超出屏幕时向内收）。
+/// 弹窗对齐气泡框左缘、紧贴其下方；右侧/底部空间不足时回退到桌宠左侧/气泡上方）。
 fn position_request_near_pet(window: &tauri::WebviewWindow, app: &AppHandle) {
     let Some(pet) = app.get_webview_window(PET_LABEL) else { return };
-    let (Ok(pet_pos), Ok(pet_size)) = (pet.outer_position(), pet.outer_size()) else { return };
+    let Ok(pet_pos) = pet.outer_position() else { return };
     let Some(monitor) = app.primary_monitor().ok().flatten() else { return };
     let sf = monitor.scale_factor();
     let screen_w = monitor.size().width as f64 / sf;
@@ -191,7 +191,6 @@ fn position_request_near_pet(window: &tauri::WebviewWindow, app: &AppHandle) {
 
     let pet_x = pet_pos.x as f64 / sf;
     let pet_y = pet_pos.y as f64 / sf;
-    let pet_w = pet_size.width as f64 / sf;
 
     // 气泡框在桌宠窗口内的位置：canvas 宽（192×scale）+ 6px 起，顶部 6px，高约 30px
     let pet_scale = crate::settings::load().scale;
@@ -201,24 +200,19 @@ fn position_request_near_pet(window: &tauri::WebviewWindow, app: &AppHandle) {
     let bubble_x = pet_x + canvas_w + 6.0;
     let bubble_bottom = pet_y + BUBBLE_TOP + BUBBLE_H;
 
-    // 弹窗对齐气泡框左缘，放在气泡下方
+    // 弹窗对齐气泡框左缘，放在气泡正下方。
+    // 弹窗起点在精灵右侧（canvas 宽之外），不会压住宠物本体，
+    // 覆盖的只是桌宠窗口的透明区域，因此无需再避让桌宠窗口。
     let mut x = bubble_x;
     let mut y = bubble_bottom + 4.0;
 
-    // 右侧超出屏幕 -> 弹窗放到桌宠左侧（气泡区也在左侧方向）
+    // 右侧超出屏幕 -> 弹窗放到桌宠左侧
     if x + REQUEST_W > screen_w {
         x = (pet_x - REQUEST_W - 8.0).max(0.0);
     }
     // 底部超出屏幕 -> 弹窗放到气泡上方
     if y + REQUEST_H > screen_h {
         y = (pet_y - REQUEST_H - 6.0).max(0.0);
-    }
-    // 避免压住宠物窗口（窗口宽度 pet_w）
-    if x < pet_x + pet_w && x + REQUEST_W > pet_x {
-        // 弹窗与桌宠水平重叠时，放到桌宠右侧（若空间不足则保持）
-        if pet_x + pet_w + REQUEST_W + 8.0 <= screen_w {
-            x = pet_x + pet_w + 8.0;
-        }
     }
 
     let _ = window.set_position(tauri::LogicalPosition::new(x, y));
@@ -227,8 +221,9 @@ fn position_request_near_pet(window: &tauri::WebviewWindow, app: &AppHandle) {
 /// 显示权限确认弹窗（不存在则创建）。
 /// 创建时用 visible(false) + show()，不 set_focus——避免激活应用导致主窗口前置。
 pub fn show_request_window(app: &AppHandle) {
-    // 已存在 -> 只显示（不聚焦，不打扰）
+    // 已存在 -> 重新定位（宠物可能被拖动过）再显示（不聚焦，不打扰）
     if let Some(window) = app.get_webview_window(REQUEST_LABEL) {
+        position_request_near_pet(&window, app);
         let _ = window.show();
         return;
     }
