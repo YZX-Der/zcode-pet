@@ -35,6 +35,18 @@ pub fn state_dir() -> PathBuf {
     home().join(".zcode-pet").join("state")
 }
 
+/// 权限请求详情目录（hook 的 PermissionRequest 分支写入）。
+pub fn requests_dir() -> PathBuf {
+    home().join(".zcode-pet").join("requests")
+}
+
+/// 读取指定会话的状态文件（不存在或解析失败返回 None）。
+pub fn read_state_file(session_id: &str) -> Option<StateFile> {
+    let path = state_dir().join(format!("{session_id}.json"));
+    let content = std::fs::read_to_string(path).ok()?;
+    serde_json::from_str(&content).ok()
+}
+
 pub fn user_pets_dir() -> PathBuf {
     home().join(".zcode-pet").join("pets")
 }
