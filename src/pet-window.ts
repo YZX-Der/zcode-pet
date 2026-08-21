@@ -40,6 +40,10 @@ let bubbleTimer: number | null = null;
 // 气泡配置（从设置读取）
 let bubbleEnabled = true;
 let bubbleSeconds = 3;
+// 永久模式下常驻显示的任务状态（空闲/休眠等非任务状态短暂显示后隐藏）
+const TASK_STATES = new Set(["running", "needs_input", "ready", "blocked"]);
+// 永久模式下非任务状态的兜底显示时长（与默认气泡时长一致）
+const MINOR_STATE_MS = 3000;
 
 // 立即设置指针样式（不等异步加载完成，避免首次移入时仍是箭头）
 (function setPetCursor() {
@@ -89,14 +93,22 @@ function showBubble(state: PetStateName, force = false): void {
   lastBubbleState = state;
   bubble.classList.add("visible");
   if (bubbleTimer) clearTimeout(bubbleTimer);
-  // 0 = 永久显示：清掉旧定时器后不再挂新定时器
-  bubbleTimer =
-    bubbleSeconds > 0
-      ? window.setTimeout(
-          () => bubble.classList.remove("visible"),
-          bubbleSeconds * 1000,
-        )
-      : null;
+  if (bubbleSeconds > 0) {
+    // 按所选时长自动消失（所有状态一致）
+    bubbleTimer = window.setTimeout(
+      () => bubble.classList.remove("visible"),
+      bubbleSeconds * 1000,
+    );
+  } else if (!TASK_STATES.has(state)) {
+    // 永久模式：非任务状态（空闲/休眠/未知）短暂显示后隐藏
+    bubbleTimer = window.setTimeout(
+      () => bubble.classList.remove("visible"),
+      MINOR_STATE_MS,
+    );
+  } else {
+    // 永久模式：任务状态常驻显示，清掉旧定时器后不再挂新定时器
+    bubbleTimer = null;
+  }
 }
 
 async function loadAndRender(): Promise<void> {

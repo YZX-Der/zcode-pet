@@ -1,6 +1,6 @@
 [package]
 name = "zcode-pet"
-version = "0.2.7"
+version = "0.2.8"
 description = "Desktop pet for ZCode"
 edition = "2021"
 
