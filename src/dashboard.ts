@@ -86,6 +86,7 @@ async function setupSettings(): Promise<void> {
   let selectedPet = settings.pet || "zbuddy";
   if (!pets.includes(selectedPet)) selectedPet = pets[0] || "zbuddy";
   currentPet = selectedPet;
+  document.getElementById("preview-pet-name")!.textContent = selectedPet;
 
   // 构建宠物图片网格（当前选中排第一）
   await renderPetGrid(petGrid, pets, selectedPet);
@@ -98,6 +99,7 @@ async function setupSettings(): Promise<void> {
     if (value === selectedPet) return;
     selectedPet = value;
     currentPet = value;
+    document.getElementById("preview-pet-name")!.textContent = value;
     // 重渲染网格（选中项排第一）
     await renderPetGrid(petGrid, pets, selectedPet);
     // 保存并更新预览
@@ -113,7 +115,7 @@ async function setupSettings(): Promise<void> {
   petVisibleEl.checked = !settings.pet_hidden;
   bubbleEnabledEl.checked = settings.bubble_enabled;
 
-  // 自定义下拉：气泡消失时长（0 = 永久显示，不自动消失）
+  // 自定义下拉：气泡消失时长（0 = 永不自动消失）
   initCustomSelect(
     bubbleSecondsWrap,
     [
@@ -121,7 +123,7 @@ async function setupSettings(): Promise<void> {
       { value: "3", label: "3 秒" },
       { value: "5", label: "5 秒" },
       { value: "10", label: "10 秒" },
-      { value: "0", label: "永久" },
+      { value: "0", label: "永不" },
     ],
     String(settings.bubble_seconds),
     () => debouncedSave(),
@@ -142,9 +144,10 @@ async function setupSettings(): Promise<void> {
     () => debouncedSave(),
   );
 
-  // 变淡透明度滑块
+  // 变淡透明度滑块（初始化时同步进度条，否则填充/滑块位置不对齐）
   sleepOpacityEl.value = String(settings.sleep_opacity);
   updateSleepOpacityLabel(sleepOpacityEl);
+  updateSliderProgress(sleepOpacityEl);
 
   updateLabels();
   updateSliderProgress(scaleEl);
@@ -182,15 +185,41 @@ async function setupSettings(): Promise<void> {
 function updateLabels(): void {
   const scaleEl = document.getElementById("scale") as HTMLInputElement;
   const opacityEl = document.getElementById("opacity") as HTMLInputElement;
-  document.getElementById("scale-val")!.textContent =
-    `${Math.round(parseFloat(scaleEl.value) * 100)}%`;
-  document.getElementById("opacity-val")!.textContent =
-    `${Math.round(parseFloat(opacityEl.value) * 100)}%`;
+  const scalePct = `${Math.round(parseFloat(scaleEl.value) * 100)}%`;
+  const opacityPct = `${Math.round(parseFloat(opacityEl.value) * 100)}%`;
+  document.getElementById("scale-val")!.textContent = scalePct;
+  document.getElementById("opacity-val")!.textContent = opacityPct;
+  // 预览区实时数值镜像
+  document.getElementById("preview-scale-val")!.textContent = scalePct;
+  document.getElementById("preview-opacity-val")!.textContent = opacityPct;
 }
 
 function updateSleepOpacityLabel(input: HTMLInputElement): void {
-  document.getElementById("sleep-opacity-val")!.textContent =
-    `${Math.round(parseFloat(input.value) * 100)}%`;
+  const pct = `${Math.round(parseFloat(input.value) * 100)}%`;
+  document.getElementById("sleep-opacity-val")!.textContent = pct;
+  document.getElementById("preview-sleep-opacity-val")!.textContent = pct;
+}
+
+/** 刷新预览区「桌宠状态」徽章（复用会话列表，取当前会话的有效状态） */
+async function refreshPetStateBadge(): Promise<void> {
+  const el = document.getElementById("preview-state")!;
+  try {
+    const sessions = await invoke<SessionInfo[]>("list_sessions");
+    const current = sessions.find((s) => s.is_current);
+    if (!current) {
+      el.textContent = "—";
+      el.style.color = "";
+      el.style.background = "";
+      return;
+    }
+    const state = current.effective_state || current.state;
+    const color = STATE_COLORS[state] || "#8e8e93";
+    el.textContent = STATE_LABELS[state] || state;
+    el.style.color = color;
+    el.style.background = `${color}1a`;
+  } catch {
+    // 保持现状
+  }
 }
 
 function debouncedSave(): void {
@@ -315,6 +344,11 @@ async function createPetCard(name: string, isSelected: boolean): Promise<HTMLEle
 
 // ── 宠物预览 ────────────────────────────────────────────
 
+/** 预览缩放：比实际略大，但封顶 1.0（防止超出预览面板） */
+function previewScale(scale: number): number {
+  return Math.min(scale * 1.2, 1.0);
+}
+
 async function initPreview(petName: string, scale: number): Promise<void> {
   try {
     const { sheet_path } = await invoke<{ sheet_path: string }>("get_pet_sheet", { petName });
@@ -325,7 +359,7 @@ async function initPreview(petName: string, scale: number): Promise<void> {
     const manifest: PetManifest = loadManifest(raw, sheetFileName);
 
     const canvas = document.getElementById("preview-canvas") as HTMLCanvasElement;
-    previewAnimator = new SpriteAnimator(canvas, scale * 0.8);
+    previewAnimator = new SpriteAnimator(canvas, previewScale(scale));
     await previewAnimator.load(manifest, convertFileSrc(sheet_path));
   } catch (e) {
     console.error("preview init failed:", e);
@@ -334,8 +368,9 @@ async function initPreview(petName: string, scale: number): Promise<void> {
 
 function updatePreviewSize(scale: number): void {
   const canvas = document.getElementById("preview-canvas") as HTMLCanvasElement;
-  canvas.style.width = `${192 * scale * 0.8}px`;
-  canvas.style.height = `${208 * scale * 0.8}px`;
+  const ps = previewScale(scale);
+  canvas.style.width = `${192 * ps}px`;
+  canvas.style.height = `${208 * ps}px`;
 }
 
 // ── 会话列表 ────────────────────────────────────────────
@@ -406,12 +441,17 @@ function escapeHtml(s: string): string {
 async function main(): Promise<void> {
   setupTabs();
   await setupSettings();
+  void refreshPetStateBadge();
 
   await listen("pet://state-changed", () => {
+    void refreshPetStateBadge();
     if (document.getElementById("tab-sessions")?.classList.contains("active")) {
       void refreshSessions();
     }
   });
+
+  // 预览区状态徽章定时刷新（不依赖所在标签页）
+  setInterval(() => void refreshPetStateBadge(), 5000);
 
   // 会话页定时刷新，保持状态/当前会话标记最新
   setInterval(() => {

@@ -641,6 +641,11 @@ input[type="range"]:active::-webkit-slider-thumb {
   flex: 0 0 260px;
   padding: 20px;
   text-align: center;
+  /* 吸顶：左侧表单滚动时预览区保持可见 */
+  position: sticky;
+  top: 16px;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
 }
 
 .preview-header {
@@ -687,9 +692,34 @@ input[type="range"]:active::-webkit-slider-thumb {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 200px;
+  height: 220px;
   background: radial-gradient(circle at center, rgba(91, 124, 250, 0.05), transparent 70%);
   border-radius: var(--radius-lg);
+}
+
+/* 预览区实时信息 */
+.preview-meta {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+}
+.preview-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.preview-row span:last-child {
+  font-weight: 600;
+  color: var(--text);
+}
+.preview-state-tag {
+  padding: 1px 8px;
+  border-radius: 8px;
+  font-weight: 700;
 }
 
 #preview-canvas {

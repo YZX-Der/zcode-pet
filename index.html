@@ -71,7 +71,7 @@
                   </button>
                   <div class="cs-dropdown"></div>
                 </div>
-                <p class="field-hint">状态变化时气泡自动消失；鼠标移入宠物可再次查看</p>
+                <p class="field-hint">状态变化时气泡自动消失；鼠标移入宠物可再次查看。选择「永不」时任务状态常驻，空闲/休眠短暂显示</p>
               </div>
 
               <div class="field field-row">
@@ -148,6 +148,13 @@
               </div>
               <div class="preview-canvas-wrap">
                 <canvas id="preview-canvas"></canvas>
+              </div>
+              <div class="preview-meta">
+                <div class="preview-row"><span>宠物</span><span id="preview-pet-name">—</span></div>
+                <div class="preview-row"><span>大小</span><span id="preview-scale-val">—</span></div>
+                <div class="preview-row"><span>不透明度</span><span id="preview-opacity-val">—</span></div>
+                <div class="preview-row"><span>变淡透明度</span><span id="preview-sleep-opacity-val">—</span></div>
+                <div class="preview-row"><span>桌宠状态</span><span id="preview-state" class="preview-state-tag">—</span></div>
               </div>
               <p class="preview-hint">拖动滑块即时查看效果</p>
             </div>
