@@ -5,8 +5,13 @@ const ZCODE_BUNDLE_ID: &str = "dev.zcode.app";
 
 #[tauri::command]
 pub fn activate_target() {
-    let _ = std::process::Command::new("osascript")
-        .args(["-e", "tell application \"ZCode\" to activate"])
+    // 用 LaunchServices 重新打开而非 osascript activate：
+    // ZCode 红绿灯关闭后进程仍在（Electron 在 macOS 不随窗口关闭退出），
+    // 普通 activate 只前置无窗口的应用，不会恢复主窗口；
+    // open -b 走 reopen 语义，会触发 ZCode 的 activate 处理恢复窗口，
+    // 且不需要 Apple Events 自动化授权。
+    let _ = std::process::Command::new("open")
+        .args(["-b", ZCODE_BUNDLE_ID])
         .output();
 }
 

@@ -89,10 +89,14 @@ function showBubble(state: PetStateName, force = false): void {
   lastBubbleState = state;
   bubble.classList.add("visible");
   if (bubbleTimer) clearTimeout(bubbleTimer);
-  bubbleTimer = window.setTimeout(
-    () => bubble.classList.remove("visible"),
-    bubbleSeconds * 1000,
-  );
+  // 0 = 永久显示：清掉旧定时器后不再挂新定时器
+  bubbleTimer =
+    bubbleSeconds > 0
+      ? window.setTimeout(
+          () => bubble.classList.remove("visible"),
+          bubbleSeconds * 1000,
+        )
+      : null;
 }
 
 async function loadAndRender(): Promise<void> {

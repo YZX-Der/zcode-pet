@@ -26,7 +26,7 @@ pub struct Settings {
     /// 状态气泡开关
     #[serde(default = "default_true")]
     pub bubble_enabled: bool,
-    /// 气泡自动消失时长（秒）
+    /// 气泡自动消失时长（秒）；0 = 永久显示，不自动消失
     #[serde(default = "default_bubble_seconds")]
     pub bubble_seconds: f64,
 }

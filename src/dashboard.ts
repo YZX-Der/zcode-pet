@@ -109,7 +109,7 @@ async function setupSettings(): Promise<void> {
   petVisibleEl.checked = !settings.pet_hidden;
   bubbleEnabledEl.checked = settings.bubble_enabled;
 
-  // 自定义下拉：气泡消失时长
+  // 自定义下拉：气泡消失时长（0 = 永久显示，不自动消失）
   initCustomSelect(
     bubbleSecondsWrap,
     [
@@ -117,6 +117,7 @@ async function setupSettings(): Promise<void> {
       { value: "3", label: "3 秒" },
       { value: "5", label: "5 秒" },
       { value: "10", label: "10 秒" },
+      { value: "0", label: "永久" },
     ],
     String(settings.bubble_seconds),
     () => debouncedSave(),
