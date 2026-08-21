@@ -75,6 +75,34 @@
               </div>
 
               <div class="field field-row">
+                <label class="section-label">智能衰减</label>
+              </div>
+
+              <div class="field">
+                <div class="field-header">
+                  <label>空闲多久变淡</label>
+                </div>
+                <div class="custom-select" id="idle-fade-wrap">
+                  <button class="cs-trigger" type="button">
+                    <span class="cs-value">600 秒</span>
+                    <span class="cs-arrow">⌄</span>
+                  </button>
+                  <div class="cs-dropdown"></div>
+                </div>
+                <p class="field-hint">空闲状态保持多久后变淡；任务状态（执行中/等待确认等）不受影响</p>
+              </div>
+
+              <div class="field">
+                <div class="field-header">
+                  <label>变淡透明度</label>
+                  <span class="value" id="sleep-opacity-val">35%</span>
+                </div>
+                <div class="slider-wrap">
+                  <input type="range" id="sleep-opacity" min="0.05" max="0.95" step="0.05" />
+                </div>
+              </div>
+
+              <div class="field field-row">
                 <label>始终置顶</label>
                 <label class="toggle">
                   <input type="checkbox" id="always-on-top" />

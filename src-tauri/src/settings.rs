@@ -29,6 +29,12 @@ pub struct Settings {
     /// 气泡自动消失时长（秒）；0 = 永久显示，不自动消失
     #[serde(default = "default_bubble_seconds")]
     pub bubble_seconds: f64,
+    /// 空闲状态变淡延迟（秒）；0 = 关闭（空闲不自动变淡）
+    #[serde(default = "default_idle_fade_seconds")]
+    pub idle_fade_seconds: f64,
+    /// 休眠变淡后的不透明度（0.05 ~ 0.95，前端滑块限制）
+    #[serde(default = "default_sleep_opacity")]
+    pub sleep_opacity: f64,
 }
 
 fn default_scale() -> f64 {
@@ -46,6 +52,12 @@ fn default_true() -> bool {
 fn default_bubble_seconds() -> f64 {
     3.0
 }
+fn default_idle_fade_seconds() -> f64 {
+    600.0
+}
+fn default_sleep_opacity() -> f64 {
+    0.35
+}
 
 impl Default for Settings {
     fn default() -> Self {
@@ -57,6 +69,8 @@ impl Default for Settings {
             pet_hidden: false,
             bubble_enabled: default_true(),
             bubble_seconds: default_bubble_seconds(),
+            idle_fade_seconds: default_idle_fade_seconds(),
+            sleep_opacity: default_sleep_opacity(),
         }
     }
 }
@@ -106,6 +120,8 @@ pub fn save_settings(app: AppHandle, settings: Settings) -> Result<Settings, Str
     merged.always_on_top = settings.always_on_top;
     merged.bubble_enabled = settings.bubble_enabled;
     merged.bubble_seconds = settings.bubble_seconds;
+    merged.idle_fade_seconds = settings.idle_fade_seconds;
+    merged.sleep_opacity = settings.sleep_opacity;
     save(&merged)?;
     // 更新全局 pet_name
     let state = app.state::<crate::AppState>();

@@ -82,7 +82,12 @@ pub fn list_sessions() -> Vec<SessionInfo> {
             }
             let Ok(content) = std::fs::read_to_string(&path) else { continue };
             let Ok(sf) = serde_json::from_str::<pet::StateFile>(&content) else { continue };
-            let effective = compute_effective_state(&sf.state, sf.ts, now);
+            let effective = compute_effective_state(
+                &sf.state,
+                sf.ts,
+                now,
+                crate::settings::load().idle_fade_seconds as i64,
+            );
             let is_current = current_sid.as_deref() == Some(&sf.session_id);
             // 非 sleep 的会话 或 当前活跃会话 才展示
             if effective == "sleep" && !is_current {

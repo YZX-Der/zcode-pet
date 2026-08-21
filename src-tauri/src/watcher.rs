@@ -84,10 +84,12 @@ fn handle_rollout_change(app: &AppHandle) {
     }
     log::info!("current session switched to {current}");
 
-    // 新会话状态：状态文件（可能已过期，但比 idle 准确）> idle
+    // 新会话状态：状态文件（可能已过期，但比 idle 准确）> idle。
+    // 无状态文件的会话用 ts=0 而非当前时间：避免切换来回横跳时不断重置
+    // 衰减时钟（否则空闲永远到不了变淡阈值，宠物一直不淡）。
     let (state, ts) = pet::read_state_file(&current)
         .map(|f| (f.state, f.ts))
-        .unwrap_or_else(|| ("idle".to_string(), chrono::Utc::now().timestamp()));
+        .unwrap_or_else(|| ("idle".to_string(), 0));
     {
         let app_state = app.state::<crate::AppState>();
         let mut sessions = app_state.sessions.lock().unwrap();
@@ -210,12 +212,71 @@ pub fn start_watcher(app: AppHandle) {
     });
 }
 
-/// 启动衰减定时器（每 60s 扫描一次）。
+/// 启动衰减定时器：每次扫描后按「下一次状态切换时刻」自适应等待
+/// （上限 60s、下限 5s），保证 ready→空闲→休眠等转换准时发射——
+/// 固定 60s 粒度下，短于 60s 的状态窗口（如 30s 的空闲）可能整段错过。
 pub fn start_decay_timer(app: AppHandle) {
     std::thread::spawn(move || loop {
-        std::thread::sleep(Duration::from_secs(60));
         apply_decay(&app);
+        let wait = next_decay_wait(&app);
+        std::thread::sleep(Duration::from_secs(wait));
     });
+}
+
+/// 计算到下一次状态切换（衰减/回收）的等待秒数（夹在 5~60s）。
+fn next_decay_wait(app: &AppHandle) -> u64 {
+    let now = chrono::Utc::now().timestamp();
+    let idle_fade = crate::settings::load().idle_fade_seconds as i64;
+    let current_sid = pet::current_session_id();
+    let delta = {
+        let app_state = app.state::<crate::AppState>();
+        let sessions = app_state.sessions.lock().unwrap();
+        next_transition_delta(&sessions, now, idle_fade, current_sid.as_deref())
+    };
+    delta.clamp(5, 60) as u64
+}
+
+/// 纯函数：距离下一次状态切换的秒数（无未来切换时返回 60）。
+/// 与 apply_decay 的判定共用同一套阈值（含 `>` 边界的 +1s）。
+fn next_transition_delta(
+    entries: &std::collections::HashMap<String, crate::SessionEntry>,
+    now: i64,
+    idle_fade_seconds: i64,
+    current_sid: Option<&str>,
+) -> i64 {
+    let mut next: Option<i64> = None;
+    for (session_id, entry) in entries {
+        let ts = entry.ts;
+        let mut moments: Vec<i64> = Vec::new();
+        match entry.raw_state.as_str() {
+            // R1: ready 持续 300s -> idle；空闲再持续 idle_fade -> sleep
+            "ready" => {
+                moments.push(ts + 301);
+                if idle_fade_seconds > 0 {
+                    moments.push(ts + 301 + idle_fade_seconds);
+                }
+            }
+            // 空闲：持续 idle_fade -> sleep（0 = 关闭，无转换）
+            "idle" => {
+                if idle_fade_seconds > 0 {
+                    moments.push(ts + idle_fade_seconds + 1);
+                }
+            }
+            // 任务状态：持续 600s -> sleep
+            _ => moments.push(ts + 601),
+        }
+        // R3: 非当前会话 1800s 回收
+        if current_sid != Some(session_id.as_str()) {
+            moments.push(ts + 1801);
+        }
+        for m in moments {
+            let d = m - now;
+            if d > 0 {
+                next = Some(next.map_or(d, |n| n.min(d)));
+            }
+        }
+    }
+    next.unwrap_or(60)
 }
 
 /// 应用衰减规则：更新窗口状态、回收失联会话。
@@ -271,4 +332,69 @@ fn apply_decay(app: &AppHandle) {
 
     // 刷新托盘菜单（Token 用量等可能在无 hook 事件时变化，定时兜底）
     crate::refresh_tray_menu(app);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::next_transition_delta;
+    use crate::SessionEntry;
+    use std::collections::HashMap;
+
+    const NOW: i64 = 10_000;
+
+    fn entry(state: &str, ts: i64) -> SessionEntry {
+        SessionEntry {
+            raw_state: state.to_string(),
+            ts,
+        }
+    }
+
+    #[test]
+    fn test_ready_next_transition_at_300s() {
+        let mut m = HashMap::new();
+        m.insert("s1".into(), entry("ready", NOW - 100));
+        // ready -> idle 在 ts+301（即 NOW+201）；空闲再 idle_fade 后 sleep
+        assert_eq!(next_transition_delta(&m, NOW, 600, None), 201);
+        assert_eq!(next_transition_delta(&m, NOW, 30, None), 201);
+    }
+
+    #[test]
+    fn test_idle_uses_configured_delay() {
+        let mut m = HashMap::new();
+        m.insert("s1".into(), entry("idle", NOW - 10));
+        // idle -> sleep 在 ts + 30 + 1 = NOW + 21
+        assert_eq!(next_transition_delta(&m, NOW, 30, Some("s1")), 21);
+        // 关闭（0）：空闲无衰减转换，当前会话豁免回收 -> 默认 60
+        assert_eq!(next_transition_delta(&m, NOW, 0, Some("s1")), 60);
+    }
+
+    #[test]
+    fn test_task_state_600s() {
+        let mut m = HashMap::new();
+        m.insert("s1".into(), entry("running", NOW - 100));
+        assert_eq!(next_transition_delta(&m, NOW, 600, None), 501);
+    }
+
+    #[test]
+    fn test_non_current_reclaim() {
+        let mut m = HashMap::new();
+        m.insert("s2".into(), entry("idle", NOW - 1790));
+        // 非当前会话：idle 睡眠时刻已过，回收在 ts+1801 = NOW+11
+        assert_eq!(next_transition_delta(&m, NOW, 600, Some("s1")), 11);
+        // 当前会话豁免回收：无未来转换 -> 60
+        assert_eq!(next_transition_delta(&m, NOW, 600, Some("s2")), 60);
+    }
+
+    #[test]
+    fn test_empty_map_defaults_60() {
+        assert_eq!(next_transition_delta(&HashMap::new(), NOW, 600, None), 60);
+    }
+
+    #[test]
+    fn test_all_transitions_past_defaults_60() {
+        let mut m = HashMap::new();
+        m.insert("s1".into(), entry("running", NOW - 1000));
+        // 当前会话、任务状态 600s 已过 -> 60
+        assert_eq!(next_transition_delta(&m, NOW, 600, Some("s1")), 60);
+    }
 }

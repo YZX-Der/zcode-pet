@@ -15,6 +15,8 @@ interface Settings {
   pet_hidden: boolean;
   bubble_enabled: boolean;
   bubble_seconds: number;
+  idle_fade_seconds: number;
+  sleep_opacity: number;
 }
 
 interface SessionInfo {
@@ -77,6 +79,8 @@ async function setupSettings(): Promise<void> {
   const petVisibleEl = document.getElementById("pet-visible") as HTMLInputElement;
   const bubbleEnabledEl = document.getElementById("bubble-enabled") as HTMLInputElement;
   const bubbleSecondsWrap = document.getElementById("bubble-seconds-wrap")!;
+  const idleFadeWrap = document.getElementById("idle-fade-wrap")!;
+  const sleepOpacityEl = document.getElementById("sleep-opacity") as HTMLInputElement;
 
   // 当前选中宠物（空则回退 zbuddy）
   let selectedPet = settings.pet || "zbuddy";
@@ -123,6 +127,25 @@ async function setupSettings(): Promise<void> {
     () => debouncedSave(),
   );
 
+  // 自定义下拉：空闲多久变淡（0 = 关闭，空闲不自动变淡）
+  initCustomSelect(
+    idleFadeWrap,
+    [
+      { value: "0", label: "关闭" },
+      { value: "30", label: "30 秒" },
+      { value: "60", label: "60 秒" },
+      { value: "120", label: "2 分钟" },
+      { value: "300", label: "5 分钟" },
+      { value: "600", label: "10 分钟" },
+    ],
+    String(settings.idle_fade_seconds),
+    () => debouncedSave(),
+  );
+
+  // 变淡透明度滑块
+  sleepOpacityEl.value = String(settings.sleep_opacity);
+  updateSleepOpacityLabel(sleepOpacityEl);
+
   updateLabels();
   updateSliderProgress(scaleEl);
   updateSliderProgress(opacityEl);
@@ -143,6 +166,11 @@ async function setupSettings(): Promise<void> {
     previewCanvas.style.opacity = opacityEl.value;
     debouncedSave();
   });
+  sleepOpacityEl.addEventListener("input", () => {
+    updateSleepOpacityLabel(sleepOpacityEl);
+    updateSliderProgress(sleepOpacityEl);
+    debouncedSave();
+  });
 
   topEl.addEventListener("change", () => debouncedSave());
   petVisibleEl.addEventListener("change", () => {
@@ -158,6 +186,11 @@ function updateLabels(): void {
     `${Math.round(parseFloat(scaleEl.value) * 100)}%`;
   document.getElementById("opacity-val")!.textContent =
     `${Math.round(parseFloat(opacityEl.value) * 100)}%`;
+}
+
+function updateSleepOpacityLabel(input: HTMLInputElement): void {
+  document.getElementById("sleep-opacity-val")!.textContent =
+    `${Math.round(parseFloat(input.value) * 100)}%`;
 }
 
 function debouncedSave(): void {
@@ -209,6 +242,8 @@ async function save(): Promise<void> {
   const topEl = document.getElementById("always-on-top") as HTMLInputElement;
   const bubbleEnabledEl = document.getElementById("bubble-enabled") as HTMLInputElement;
   const bubbleSecondsWrap = document.getElementById("bubble-seconds-wrap")!;
+  const idleFadeWrap = document.getElementById("idle-fade-wrap")!;
+  const sleepOpacityEl = document.getElementById("sleep-opacity") as HTMLInputElement;
 
   // pet_hidden 不在此处保存（由 set_pet_visible 命令管理，避免覆盖）
   const newSettings: Omit<Settings, "pet_hidden"> = {
@@ -218,6 +253,8 @@ async function save(): Promise<void> {
     always_on_top: topEl.checked,
     bubble_enabled: bubbleEnabledEl.checked,
     bubble_seconds: parseFloat(bubbleSecondsWrap.dataset.value || "3"),
+    idle_fade_seconds: parseFloat(idleFadeWrap.dataset.value || "600"),
+    sleep_opacity: parseFloat(sleepOpacityEl.value),
   };
 
   try {

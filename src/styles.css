@@ -583,6 +583,15 @@ input[type="range"]:active::-webkit-slider-thumb {
   margin-top: 6px;
 }
 
+/* 配置分区标题（如「智能衰减」） */
+.section-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  letter-spacing: 0.5px;
+  margin-top: 4px;
+}
+
 /* ── Toggle 开关 ──────────────────────────────────── */
 .toggle {
   position: relative;

@@ -17,6 +17,8 @@ let interactionBound = false;
 let currentState: PetStateName | null = null;
 // 用户设置的基础不透明度（sleep 时在此基础上变淡）
 let baseOpacity = 1;
+// 休眠变淡后的不透明度比例（从设置读取，默认 35%）
+let sleepOpacity = 0.35;
 
 // ── 状态气泡 ────────────────────────────────────────
 const BUBBLE_TEXT: Record<string, string> = {
@@ -61,17 +63,22 @@ function getInit() {
   } | undefined;
 }
 
-/** 根据状态计算实际不透明度：sleep 变淡，其他恢复正常 */
+/** 根据状态计算实际不透明度：sleep 按配置比例变淡，其他恢复正常 */
 function effectiveOpacity(state: PetStateName, opacity: number): number {
-  return state === "sleep" ? opacity * 0.35 : opacity;
+  return state === "sleep" ? opacity * sleepOpacity : opacity;
 }
 
-/** 读取气泡配置（设置页保存时 recreate_all 会重载窗口，配置自动刷新） */
-async function loadBubbleConfig(): Promise<void> {
+/** 读取宠物配置（气泡 + 变淡透明度；设置页保存时 recreate_all 会重载窗口自动刷新） */
+async function loadPetConfig(): Promise<void> {
   try {
-    const s = await invoke<{ bubble_enabled: boolean; bubble_seconds: number }>("get_settings");
+    const s = await invoke<{
+      bubble_enabled: boolean;
+      bubble_seconds: number;
+      sleep_opacity: number;
+    }>("get_settings");
     bubbleEnabled = s.bubble_enabled;
     bubbleSeconds = s.bubble_seconds;
+    sleepOpacity = s.sleep_opacity;
   } catch {
     // 保持默认
   }
@@ -118,8 +125,8 @@ async function loadAndRender(): Promise<void> {
     return;
   }
 
-  // 读取气泡配置（设置变更后 recreate_all 会重载窗口，这里自动刷新）
-  await loadBubbleConfig();
+  // 读取宠物配置（设置变更后 recreate_all 会重载窗口，这里自动刷新）
+  await loadPetConfig();
 
   const sheetPath = init.sheet;
   const scale = init.scale ?? 1;

@@ -29,7 +29,7 @@
 
 ### 方式一：下载发行包（推荐）
 
-1. 从 [Releases](https://github.com/YZX-Der/zcode-pet/releases) 下载 `zcode-pet_0.2.8_aarch64.dmg`
+1. 从 [Releases](https://github.com/YZX-Der/zcode-pet/releases) 下载 `zcode-pet_0.2.9_aarch64.dmg`
 2. 打开 dmg，将 zcode-pet 拖到「应用程序」文件夹
 3. 首次打开：右键 -> 打开（绕过 Gatekeeper）
 4. 启动后打开「说明」页，点击「一键安装」启用 hooks 联动
@@ -91,15 +91,18 @@ ZCode 7 个 hooks 事件
 | PermissionRequest | needs_input | 等待确认 |
 | Stop | ready | 任务完成 |
 | PostToolUseFailure | blocked | 出错 |
-| -（600s 无活动） | sleep | 睡觉（透明度降至 35%） |
+| -（空闲 N 秒 / 任务状态 600s 无活动） | sleep | 睡觉（按配置变淡，默认透明度 35%） |
 
 ### 衰减与回收
 
 | 规则 | 阈值 | 效果 |
 |------|------|------|
 | R1 ready 衰减 | ready 持续 300s | ready -> idle |
-| R2 睡眠 | 任意状态 600s | -> sleep（变淡显示） |
+| R2 睡眠 | 空闲持续 N 秒（配置可调，默认 600s） | -> sleep（按配置透明度变淡，默认 35%） |
+| R2 睡眠 | 任务状态（执行中/等待确认/出错）持续 600s | -> sleep（变淡显示） |
 | R3 回收 | 1800s 无活动 | 删状态文件（当前会话豁免，不消失） |
+
+配置页「智能衰减」可自定义：空闲多久变淡（关闭 / 30 秒 / 60 秒 / 2 分钟 / 5 分钟 / 10 分钟）、变淡透明度（5%～95%）；任务状态不受空闲设置影响。
 
 详见 [状态协议规范](docs/03-state-protocol.md)。
 

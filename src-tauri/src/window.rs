@@ -18,17 +18,30 @@ pub struct StatePayload {
 }
 
 /// 根据原始状态与时间戳计算有效状态（含衰减规则）。
+/// 空闲状态按用户配置的变淡延迟衰减，任务状态保持原有 600s 规则。
 pub fn effective_state(raw_state: &str, ts: i64) -> String {
-    compute_effective_state(raw_state, ts, chrono::Utc::now().timestamp())
+    let idle_fade = crate::settings::load().idle_fade_seconds as i64;
+    compute_effective_state(raw_state, ts, chrono::Utc::now().timestamp(), idle_fade)
 }
 
 /// 可测试的纯函数版本。
-pub fn compute_effective_state(raw_state: &str, ts: i64, now: i64) -> String {
+pub fn compute_effective_state(raw_state: &str, ts: i64, now: i64, idle_fade_seconds: i64) -> String {
     let elapsed = now - ts;
+    // R1: ready 持续 300s -> idle；此后按空闲规则变淡（从进入 idle 起算）。
+    // 修复原逻辑：ready 衰减成空闲后永不衰减的问题。
     if raw_state == "ready" && elapsed > 300 {
+        if idle_fade_seconds > 0 && now - (ts + 300) > idle_fade_seconds {
+            return "sleep".into();
+        }
         return "idle".into();
     }
-    if elapsed > 600 {
+    if raw_state == "idle" {
+        // R2（空闲）：按可配置延迟变淡；0 = 关闭
+        if idle_fade_seconds > 0 && elapsed > idle_fade_seconds {
+            return "sleep".into();
+        }
+    } else if elapsed > 600 {
+        // R2（任务状态）：保持原有 600s 规则
         return "sleep".into();
     }
     raw_state.to_string()
@@ -431,6 +444,7 @@ mod tests {
     use super::{compute_effective_state, is_active_state};
 
     const NOW: i64 = 10_000;
+    const IDLE_FADE: i64 = 600; // 默认空闲变淡延迟
 
     #[test]
     fn test_active_state_list_filter() {
@@ -444,40 +458,74 @@ mod tests {
 
     #[test]
     fn test_running_stays_running() {
-        assert_eq!(compute_effective_state("running", NOW - 10, NOW), "running");
+        assert_eq!(compute_effective_state("running", NOW - 10, NOW, IDLE_FADE), "running");
     }
 
     #[test]
     fn test_needs_input_stays() {
         assert_eq!(
-            compute_effective_state("needs_input", NOW - 100, NOW),
+            compute_effective_state("needs_input", NOW - 100, NOW, IDLE_FADE),
             "needs_input"
         );
     }
 
     #[test]
     fn test_ready_within_300s_stays_ready() {
-        assert_eq!(compute_effective_state("ready", NOW - 300, NOW), "ready");
+        assert_eq!(compute_effective_state("ready", NOW - 300, NOW, IDLE_FADE), "ready");
     }
 
     #[test]
     fn test_ready_after_300s_decays_to_idle() {
-        assert_eq!(compute_effective_state("ready", NOW - 301, NOW), "idle");
+        assert_eq!(compute_effective_state("ready", NOW - 301, NOW, IDLE_FADE), "idle");
     }
 
     #[test]
     fn test_any_state_after_600s_decays_to_sleep() {
-        assert_eq!(compute_effective_state("running", NOW - 601, NOW), "sleep");
-        assert_eq!(compute_effective_state("blocked", NOW - 601, NOW), "sleep");
+        assert_eq!(compute_effective_state("running", NOW - 601, NOW, IDLE_FADE), "sleep");
+        assert_eq!(compute_effective_state("blocked", NOW - 601, NOW, IDLE_FADE), "sleep");
     }
 
     #[test]
     fn test_ready_exactly_300s_stays_ready() {
-        assert_eq!(compute_effective_state("ready", NOW - 300, NOW), "ready");
+        assert_eq!(compute_effective_state("ready", NOW - 300, NOW, IDLE_FADE), "ready");
     }
 
     #[test]
     fn test_any_state_exactly_600s_not_sleep() {
-        assert_eq!(compute_effective_state("idle", NOW - 600, NOW), "idle");
+        assert_eq!(compute_effective_state("idle", NOW - 600, NOW, IDLE_FADE), "idle");
+    }
+
+    #[test]
+    fn test_idle_fades_after_configured_delay() {
+        // 自定义延迟 60s：61s 后变淡
+        assert_eq!(compute_effective_state("idle", NOW - 61, NOW, 60), "sleep");
+        // 60s 内保持空闲
+        assert_eq!(compute_effective_state("idle", NOW - 60, NOW, 60), "idle");
+    }
+
+    #[test]
+    fn test_idle_fade_disabled_stays_idle() {
+        // 0 = 关闭空闲变淡，空闲永不衰减
+        assert_eq!(compute_effective_state("idle", NOW - 3600, NOW, 0), "idle");
+    }
+
+    #[test]
+    fn test_task_states_ignore_idle_fade_setting() {
+        // 任务状态不受空闲延迟配置影响，仍按 600s
+        assert_eq!(compute_effective_state("running", NOW - 61, NOW, 60), "running");
+        assert_eq!(compute_effective_state("running", NOW - 601, NOW, 60), "sleep");
+    }
+
+    #[test]
+    fn test_ready_decays_to_idle_then_sleeps_per_idle_fade() {
+        // ready 300s 后变 idle；从进入 idle 起算 idle_fade 后变 sleep（修复永不衰减）
+        assert_eq!(compute_effective_state("ready", NOW - 301, NOW, 600), "idle");
+        // 进入 idle 600s 整仍为 idle，601s 后 sleep
+        assert_eq!(compute_effective_state("ready", NOW - 900, NOW, 600), "idle");
+        assert_eq!(compute_effective_state("ready", NOW - 901, NOW, 600), "sleep");
+        // idle_fade=60：ready 361s（300+60+1）后变 sleep
+        assert_eq!(compute_effective_state("ready", NOW - 361, NOW, 60), "sleep");
+        // 关闭（0）：ready 变 idle 后不再衰减
+        assert_eq!(compute_effective_state("ready", NOW - 3600, NOW, 0), "idle");
     }
 }
